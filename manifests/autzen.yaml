@@ -1,4 +1,5 @@
 schema_version: 1
+# providers-schema-verify: 2026-07-31T20:49:02Z
 
 # Well-known PDAL/point-cloud community sample dataset (Autzen Stadium, Eugene, Oregon). Original collection provider not confirmed here.
 # TODO: confirm license before publishing -- not yet verified for this dataset.
