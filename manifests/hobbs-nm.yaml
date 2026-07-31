@@ -1,0 +1,28 @@
+schema_version: 1
+
+# Filename attributes this to Bohannan Huston, an Albuquerque-based surveying/engineering firm.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: hobbs-nm
+  title: "Hobbs, New Mexico"
+  summary: "TODO: write a one-line summary for Hobbs, New Mexico"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: Bohannan Huston
+      roles: [producer]
+      url: https://www.bhinc.com/
+  tags: [new-mexico]
+  viewer:
+    enabled: true
+    default_asset_id: hobbs-nm-bohannan-huston
+
+assets:
+  - id: hobbs-nm-bohannan-huston
+    href: s3://pointcloud/hobbs/hobbs-nm-bohannan-huston.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

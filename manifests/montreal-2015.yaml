@@ -1,0 +1,27 @@
+schema_version: 1
+
+# Bucket also contains montreal-full-1m.tif (a 1m raster) alongside the COPC -- likely a pre-existing derivative product, not a second source asset; excluded from assets below pending confirmation.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: montreal-2015
+  title: Montreal 2015
+  summary: "TODO: write a one-line summary for Montreal 2015"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [quebec, canada, urban]
+  temporal:
+    start: 2015-01-01
+  viewer:
+    enabled: true
+    default_asset_id: montreal-2015
+
+assets:
+  - id: montreal-2015
+    href: s3://pointcloud/montreal/montreal-2015.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

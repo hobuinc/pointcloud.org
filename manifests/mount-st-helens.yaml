@@ -1,0 +1,34 @@
+schema_version: 1
+
+# Two epochs: 2011 and 2020. Provider not confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: mount-st-helens
+  title: Mount St. Helens
+  summary: "TODO: write a one-line summary for Mount St. Helens"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [washington, volcano]
+  temporal:
+    start: 2011-01-01
+    end: 2020-12-31
+  viewer:
+    enabled: true
+    default_asset_id: st-helens-2011
+
+assets:
+  - id: st-helens-2011
+    href: s3://pointcloud/st-helens/st-helens-2011.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution
+
+  - id: st-helens-2020
+    href: s3://pointcloud/st-helens/st-helens-2020.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

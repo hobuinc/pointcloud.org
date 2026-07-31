@@ -1,0 +1,43 @@
+schema_version: 1
+
+# Three epochs, all USGS-attributed per filename: 2016 (lidar first-return) and 2022/2023 (SfM ultra-high-density point clouds).
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: santa-cruz-westcliff
+  title: Santa Cruz West Cliff
+  summary: "TODO: write a one-line summary for Santa Cruz West Cliff"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: USGS
+      roles: [producer, licensor]
+      url: https://www.usgs.gov/
+  tags: [california, usgs, coastal]
+  temporal:
+    start: 2016-01-01
+    end: 2023-01-05
+  viewer:
+    enabled: true
+    default_asset_id: usgs-westcliff-scruz-2016-lidar-firstreturn-nad83-2011-utm10n
+
+assets:
+  - id: usgs-westcliff-scruz-2016-lidar-firstreturn-nad83-2011-utm10n
+    href: s3://pointcloud/santacruz/USGS_WestCliff_SCruz_2016_Lidar_FirstReturn_NAD83_2011_UTM10N.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution
+
+  - id: usgs-westcliff-scruz-2022-09-13-sfm-uhipointcloud-nad83-2011-utm10n
+    href: s3://pointcloud/santacruz/USGS_WestCliff_SCruz_2022_09_13_SfM_UHiPointCloud_NAD83_2011_UTM10N.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution
+
+  - id: usgs-westcliff-scruz-2023-01-05-sfm-uhipointcloud-nad83-2011-utm10n
+    href: s3://pointcloud/santacruz/USGS_WestCliff_SCruz_2023_01_05_SfM_UHiPointCloud_NAD83_2011_UTM10N.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Half Dome, Yosemite National Park. Provider not confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: half-dome
+  title: Half Dome
+  summary: "TODO: write a one-line summary for Half Dome"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [california, yosemite]
+  viewer:
+    enabled: true
+    default_asset_id: half-dome
+
+assets:
+  - id: half-dome
+    href: s3://pointcloud/half-dome/half-dome.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

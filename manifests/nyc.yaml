@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Provider not confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: nyc
+  title: New York City
+  summary: "TODO: write a one-line summary for New York City"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [new-york, urban]
+  viewer:
+    enabled: true
+    default_asset_id: nyc
+
+assets:
+  - id: nyc
+    href: s3://pointcloud/nyc/nyc.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

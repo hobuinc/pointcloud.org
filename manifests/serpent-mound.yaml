@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Serpent Mound archaeological site, Ohio. Provider not confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: serpent-mound
+  title: Serpent Mound
+  summary: "TODO: write a one-line summary for Serpent Mound"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [ohio, archaeology]
+  viewer:
+    enabled: true
+    default_asset_id: serpent-mound
+
+assets:
+  - id: serpent-mound
+    href: s3://pointcloud/serpent-mound/serpent-mound.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

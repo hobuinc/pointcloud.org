@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Filename suffix 'TPU' likely refers to Total Propagated Uncertainty (a lidar QC metric), not a provider name. NCALM is headquartered at the University of Houston, though that connection is not confirmed for this specific dataset.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: university-of-houston-campus
+  title: University of Houston Campus
+  summary: "TODO: write a one-line summary for University of Houston Campus"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [texas, university-campus]
+  viewer:
+    enabled: true
+    default_asset_id: uoh-campus-tpu
+
+assets:
+  - id: uoh-campus-tpu
+    href: s3://pointcloud/university-of-houston-campus/UoH-campus-TPU.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Provider not confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: iwo-jima
+  title: Iwo Jima
+  summary: "TODO: write a one-line summary for Iwo Jima"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [japan, pacific, island]
+  viewer:
+    enabled: true
+    default_asset_id: iwo-jima
+
+assets:
+  - id: iwo-jima
+    href: s3://pointcloud/iwo-jima/iwo-jima.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

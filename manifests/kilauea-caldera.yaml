@@ -1,0 +1,37 @@
+schema_version: 1
+
+# Two epochs: 2009 (NCALM) and 2019 (source encoded as 'HMMQSI' in the filename -- meaning not confirmed).
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: kilauea-caldera
+  title: Kilauea Caldera
+  summary: "TODO: write a one-line summary for Kilauea Caldera"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: NCALM
+      roles: [producer]
+      url: https://ncalm.cive.uh.edu/
+  tags: [hawaii, volcano]
+  temporal:
+    start: 2009-01-01
+    end: 2019-12-31
+  viewer:
+    enabled: true
+    default_asset_id: 2009-kilauea-caldera-ncalm
+
+assets:
+  - id: 2009-kilauea-caldera-ncalm
+    href: s3://pointcloud/kilaueau/2009-kilauea-caldera-NCALM.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution
+
+  - id: 2019-kilauea-caldera-hmmqsi
+    href: s3://pointcloud/kilaueau/2019-kilauea-caldera-HMMQSI.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Well-known PDAL/point-cloud community sample dataset (Autzen Stadium, Eugene, Oregon). Original collection provider not confirmed here.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: autzen
+  title: Autzen Stadium
+  summary: "TODO: write a one-line summary for Autzen Stadium"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [oregon, sample-data]
+  viewer:
+    enabled: true
+    default_asset_id: autzen-classified
+
+assets:
+  - id: autzen-classified
+    href: s3://pointcloud/autzen/autzen-classified.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

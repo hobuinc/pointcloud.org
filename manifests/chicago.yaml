@@ -1,0 +1,30 @@
+schema_version: 1
+
+# Sourced from USGS 3DEP public EPT (USGS_LPC_IL_4County_Cook_2017_LAS_2019), per the ingest pipeline definition (Chicago.json) stored alongside the data. Resolution 2 below is carried over from that same pipeline definition, not independently confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: chicago
+  title: Chicago Downtown
+  summary: "TODO: write a one-line summary for Chicago Downtown"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: USGS
+      roles: [producer, licensor]
+      url: https://www.usgs.gov/
+  tags: [illinois, usgs, urban]
+  temporal:
+    start: 2017-01-01
+  viewer:
+    enabled: true
+    default_asset_id: chicago-downtown
+
+assets:
+  - id: chicago-downtown
+    href: s3://pointcloud/chicago/chicago-downtown.copc.laz
+    roles: [data]
+    copc:
+      resolution: 2  # TODO: confirm intended resolution

@@ -1,0 +1,30 @@
+schema_version: 1
+
+# LIKELY DUPLICATE: this folder's file is byte-identical in name and size to barringer/barringer-meteorite-crater-ncalm-2010-10.5069-G9V40S4C.copc.laz. Recommend confirming with Howard whether this folder should be removed rather than manifested as a second dataset.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: meteor-crater-duplicate
+  title: "Meteor Crater (duplicate of barringer-meteorite-crater)"
+  summary: "TODO: write a one-line summary for Meteor Crater (duplicate of barringer-meteorite-crater)"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: NCALM
+      roles: [producer]
+      url: https://ncalm.cive.uh.edu/
+  tags: [arizona, ncalm, impact-crater, duplicate]
+  temporal:
+    start: 2010-01-01
+  viewer:
+    enabled: true
+    default_asset_id: barringer-meteorite-crater-ncalm-2010-10-5069-g9v40s4c
+
+assets:
+  - id: barringer-meteorite-crater-ncalm-2010-10-5069-g9v40s4c
+    href: s3://pointcloud/meteor/barringer-meteorite-crater-ncalm-2010-10.5069-G9V40S4C.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

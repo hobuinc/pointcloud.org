@@ -1,0 +1,13 @@
+{
+  "name": "pointcloud-org-manifests",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Community-contributed dataset manifests for pointcloud.org -- see README.md for how to add a dataset. This repo holds manifests/*.yaml and their CI validation only; all ingest/build/deploy code and secrets live in the private hobuinc/pointcloud.org-infrastructure repo.",
+  "scripts": {
+    "validate-manifests": "node scripts/validate-manifests.mjs"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

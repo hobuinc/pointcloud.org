@@ -1,0 +1,100 @@
+# Validates manifests/*.yaml on every PR that touches them, then --
+# once such a PR is merged -- fires a repository_dispatch at the
+# private hobuinc/pointcloud.org-infrastructure repo, which actually
+# talks to the ingest Worker (see that repo's
+# .github/workflows/receive-manifest-dispatch.yml).
+#
+# This repo is the public, community-facing half of the
+# pointcloud.org / pointcloud.org-infrastructure split (2026-07-31):
+# anyone can open a PR here adding or editing a manifests/*.yaml file,
+# but this repo holds no infrastructure secrets other than
+# INFRA_DISPATCH_TOKEN, a fine-grained PAT scoped *only* to
+# hobuinc/pointcloud.org-infrastructure with Contents: Read and write
+# (the permission the dispatches endpoint checks) -- it cannot read or
+# modify anything else there, and cannot touch Cloudflare, the Worker,
+# or the site build directly.
+#
+# Two separate jobs, gated by `if:`, rather than two separate `on:`
+# triggers -- both need to react to the same `pull_request` event
+# (opened/updated vs. merged-and-closed), and GitHub Actions can't
+# express "run this job only when merged" as a top-level `on:` filter.
+name: Manifest ingest
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - "manifests/*.yaml"
+
+jobs:
+  validate:
+    # Runs on every open/update, not just the initial open -- catches a
+    # fixup pushed after review comments, same as any other CI check.
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies (js-yaml, for the validator)
+        run: npm install
+      - name: Validate manifests
+        run: node scripts/validate-manifests.mjs
+
+  dispatch-ingest:
+    # Only the merge path dispatches -- a PR that's closed without
+    # merging (abandoned) should never kick off ingest.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies (js-yaml, for build-datasets-payload.mjs)
+        run: npm install
+
+      - name: Determine which manifest files this PR changed
+        id: changed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            const manifestFiles = files
+              .filter((f) => f.filename.startsWith("manifests/") && f.filename.endsWith(".yaml") && f.status !== "removed")
+              .map((f) => f.filename);
+            core.setOutput("files", manifestFiles.join(" "));
+
+      - name: Build datasets payload
+        id: payload
+        if: steps.changed.outputs.files != ''
+        run: |
+          echo "json<<PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
+          node scripts/build-datasets-payload.mjs ${{ steps.changed.outputs.files }} >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_OUTPUT"
+          echo "PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch ingest to pointcloud.org-infrastructure
+        if: steps.changed.outputs.files != ''
+        uses: actions/github-script@v7
+        env:
+          DATASETS_JSON: ${{ steps.payload.outputs.json }}
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          script: |
+            const payload = JSON.parse(process.env.DATASETS_JSON);
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "manifest-ingest",
+              client_payload: payload,
+            });

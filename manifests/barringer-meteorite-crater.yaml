@@ -1,0 +1,33 @@
+schema_version: 1
+
+# NCALM acquisition, 2010. Filename encodes an OpenTopography-style DOI (10.5069/G9V40S4C) -- confirm and link to the actual OpenTopography dataset page.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: barringer-meteorite-crater
+  title: Barringer Meteorite Crater
+  summary: "TODO: write a one-line summary for Barringer Meteorite Crater"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: NCALM
+      roles: [producer]
+      url: https://ncalm.cive.uh.edu/
+  links:
+    - rel: cite-as
+      href: https://doi.org/10.5069/G9V40S4C
+  tags: [arizona, ncalm, impact-crater]
+  temporal:
+    start: 2010-01-01
+  viewer:
+    enabled: true
+    default_asset_id: barringer-meteorite-crater-ncalm-2010-10-5069-g9v40s4c
+
+assets:
+  - id: barringer-meteorite-crater-ncalm-2010-10-5069-g9v40s4c
+    href: s3://pointcloud/barringer/barringer-meteorite-crater-ncalm-2010-10.5069-G9V40S4C.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

@@ -1,0 +1,31 @@
+schema_version: 1
+
+# Filename encodes CRREL/RSGIS and an acquisition date of 2021-09-01. CRREL = US Army Cold Regions Research and Engineering Laboratory.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: boston-lot
+  title: Boston Lot
+  summary: "TODO: write a one-line summary for Boston Lot"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers:
+    - name: CRREL
+      roles: [producer]
+      url: https://www.erdc.usace.army.mil/Locations/CRREL/
+  tags: [new-hampshire, crrel]
+  temporal:
+    start: 2021-09-01
+    end: 2021-09-01
+  viewer:
+    enabled: true
+    default_asset_id: boston-lot-2021-09-01-crrel-rsgis
+
+assets:
+  - id: boston-lot-2021-09-01-crrel-rsgis
+    href: s3://pointcloud/boston-lot/boston-lot-2021-09-01-CRREL-RSGIS.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

@@ -1,0 +1,25 @@
+schema_version: 1
+
+# Sourced via an Entwine EPT mirror (na-c.entwine.io/dk) per the ingest script (grab.sh) stored alongside the data -- original Danish national lidar provider not confirmed here.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: copenhagen-kastellet
+  title: Copenhagen Kastellet
+  summary: "TODO: write a one-line summary for Copenhagen Kastellet"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [denmark, copenhagen]
+  viewer:
+    enabled: true
+    default_asset_id: copenhagen-kastellet
+
+assets:
+  - id: copenhagen-kastellet
+    href: s3://pointcloud/denmark/copenhagen-kastellet.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution

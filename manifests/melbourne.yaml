@@ -1,0 +1,27 @@
+schema_version: 1
+
+# Provider not confirmed.
+# TODO: confirm license before publishing -- not yet verified for this dataset.
+dataset:
+  id: melbourne
+  title: Melbourne 2018
+  summary: "TODO: write a one-line summary for Melbourne 2018"
+  license: UNKNOWN
+  derivatives: true
+  maintainer:
+    name: Howard Butler
+    email: howard@hobu.co
+  providers: []  # TODO: confirm provider(s)
+  tags: [australia, urban]
+  temporal:
+    start: 2018-01-01
+  viewer:
+    enabled: true
+    default_asset_id: melbourne-2018
+
+assets:
+  - id: melbourne-2018
+    href: s3://pointcloud/melbourne/melbourne-2018.copc.laz
+    roles: [data]
+    copc:
+      resolution: 1  # TODO: confirm intended resolution
