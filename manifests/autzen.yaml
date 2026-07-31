@@ -23,4 +23,3 @@ assets:
     roles: [data]
     copc:
       resolution: 1  # TODO: confirm intended resolution
-# trigger-verify: 2026-07-31T18:37:55Z
