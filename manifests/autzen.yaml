@@ -25,4 +25,3 @@ assets:
     roles: [data]
     copc:
       resolution: 1  # TODO: confirm intended resolution
-# schema-v2-verify: 2026-07-31T20:16:13Z
