@@ -8,7 +8,9 @@ dataset:
   summary: "TODO: write a one-line summary for Boston Lot"
   license: UNKNOWN
   derivatives: true
-  maintainer:
+  organization:
+    name: "CRREL"
+  contact:
     name: Howard Butler
     email: howard@hobu.co
   providers:

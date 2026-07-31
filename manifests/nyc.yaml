@@ -8,7 +8,9 @@ dataset:
   summary: "TODO: write a one-line summary for New York City"
   license: UNKNOWN
   derivatives: true
-  maintainer:
+  organization:
+    name: "TODO: confirm organization name"
+  contact:
     name: Howard Butler
     email: howard@hobu.co
   providers: []  # TODO: confirm provider(s)

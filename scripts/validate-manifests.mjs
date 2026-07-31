@@ -56,18 +56,43 @@ function validateManifest(file, manifest) {
     errors.push(`dataset.tags must be a non-empty array (at least one tag)`);
   }
 
-  // Required per Howard, 2026-07-31: every manifest must name a
-  // maintainer to notify if this dataset's ingest preflight fails (see
-  // worker/src/email.ts and directoryPreflight.ts).
-  const maintainer = dataset.maintainer;
-  if (!maintainer || typeof maintainer !== "object") {
-    errors.push(`dataset.maintainer is required (must have "name" and "email")`);
+  // Required per Howard, 2026-08-01: the publishing organization's name.
+  const organization = dataset.organization;
+  if (!organization || typeof organization !== "object") {
+    errors.push(`dataset.organization is required (must have "name")`);
+  } else if (!organization.name || typeof organization.name !== "string") {
+    errors.push(`dataset.organization.name is required`);
+  }
+
+  // Required per Howard, 2026-08-01 (replaced "maintainer" -- same role:
+  // who can update this dataset's manifest/URLs, and who gets emailed if
+  // ingest preflight fails, see worker/src/email.ts and
+  // directoryPreflight.ts).
+  const contact = dataset.contact;
+  if (!contact || typeof contact !== "object") {
+    errors.push(`dataset.contact is required (must have "name" and "email")`);
   } else {
-    if (!maintainer.name || typeof maintainer.name !== "string") {
-      errors.push(`dataset.maintainer.name is required`);
+    if (!contact.name || typeof contact.name !== "string") {
+      errors.push(`dataset.contact.name is required`);
     }
-    if (!maintainer.email || typeof maintainer.email !== "string" || !maintainer.email.includes("@")) {
-      errors.push(`dataset.maintainer.email is required and must look like an email address`);
+    if (!contact.email || typeof contact.email !== "string" || !contact.email.includes("@")) {
+      errors.push(`dataset.contact.email is required and must look like an email address`);
+    }
+  }
+
+  if (dataset.publication_date !== undefined && typeof dataset.publication_date !== "string") {
+    errors.push(`dataset.publication_date must be a string (ISO 8601 date) if given`);
+  }
+
+  if (dataset.metadata_links !== undefined) {
+    if (!Array.isArray(dataset.metadata_links)) {
+      errors.push(`dataset.metadata_links must be an array if given`);
+    } else {
+      dataset.metadata_links.forEach((link, i) => {
+        if (!link || typeof link !== "object" || !link.href || typeof link.href !== "string") {
+          errors.push(`dataset.metadata_links[${i}].href is required`);
+        }
+      });
     }
   }
 
@@ -77,10 +102,12 @@ function validateManifest(file, manifest) {
 
   const hasAssets = Array.isArray(manifest.assets) && manifest.assets.length > 0;
   const hasAssetsDir = manifest.assets_dir && typeof manifest.assets_dir === "object";
-  if (hasAssets && hasAssetsDir) {
-    errors.push(`manifest has both "assets" and "assets_dir" -- exactly one is allowed`);
-  } else if (!hasAssets && !hasAssetsDir) {
-    errors.push(`manifest must have a non-empty "assets" array or an "assets_dir" block`);
+  const hasExternalSource = manifest.external_source && typeof manifest.external_source === "object";
+  const assetFormCount = [hasAssets, hasAssetsDir, hasExternalSource].filter(Boolean).length;
+  if (assetFormCount > 1) {
+    errors.push(`manifest has more than one of "assets"/"assets_dir"/"external_source" -- exactly one is allowed`);
+  } else if (assetFormCount === 0) {
+    errors.push(`manifest must have a non-empty "assets" array, an "assets_dir" block, or an "external_source" block`);
   } else if (hasAssets) {
     manifest.assets.forEach((asset, i) => {
       if (!asset.id) errors.push(`assets[${i}].id is required`);
@@ -91,10 +118,16 @@ function validateManifest(file, manifest) {
       if (!asset.copc || typeof asset.copc.resolution !== "number") {
         errors.push(`assets[${i}].copc.resolution is required and must be a number`);
       }
+      if (asset.endpoint !== undefined && typeof asset.endpoint !== "string") {
+        errors.push(`assets[${i}].endpoint must be a string if given`);
+      }
     });
   } else if (hasAssetsDir) {
     const ad = manifest.assets_dir;
     if (!ad.href) errors.push(`assets_dir.href is required`);
+    if (!ad.href?.startsWith("s3://")) {
+      errors.push(`assets_dir.href must be an "s3://<bucket>/..." URL -- assets_dir is R2-only, see worker/src/types.ts`);
+    }
     if (!Array.isArray(ad.roles) || ad.roles.length === 0) {
       errors.push(`assets_dir.roles must be a non-empty array`);
     }
@@ -103,6 +136,14 @@ function validateManifest(file, manifest) {
     }
     if (ad.pattern !== undefined && typeof ad.pattern !== "string") {
       errors.push(`assets_dir.pattern must be a string if given`);
+    }
+  } else if (hasExternalSource) {
+    const es = manifest.external_source;
+    if (!es.href || typeof es.href !== "string") {
+      errors.push(`external_source.href is required`);
+    }
+    if (es.expand !== undefined && typeof es.expand !== "boolean") {
+      errors.push(`external_source.expand must be true/false if given`);
     }
   }
 

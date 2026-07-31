@@ -57,7 +57,9 @@ dataset:
   # for the authoritative text.
   license: "DATA.GOV.HK Terms and Conditions of Use -- free reuse for commercial and non-commercial purposes, with attribution"
   derivatives: true
-  maintainer:
+  organization:
+    name: "Civil Engineering and Development Department (CEDD), HKSARG"
+  contact:
     name: Howard Butler
     email: howard@hobu.co
   providers:

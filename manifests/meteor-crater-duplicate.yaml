@@ -8,7 +8,9 @@ dataset:
   summary: "TODO: write a one-line summary for Meteor Crater (duplicate of barringer-meteorite-crater)"
   license: UNKNOWN
   derivatives: true
-  maintainer:
+  organization:
+    name: "NCALM"
+  contact:
     name: Howard Butler
     email: howard@hobu.co
   providers:
