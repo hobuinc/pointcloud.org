@@ -8,13 +8,12 @@ dataset:
   summary: "TODO: write a one-line summary for Kilauea Caldera"
   license: UNKNOWN
   derivatives: true
-  organization:
-    name: "NCALM"
-  contact:
-    name: Howard Butler
-    email: howard@hobu.co
   providers:
-    - name: NCALM
+    - organization:
+        name: NCALM
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
       roles: [producer]
       url: https://ncalm.cive.uh.edu/
   tags: [hawaii, volcano]

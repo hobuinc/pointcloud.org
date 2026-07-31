@@ -8,12 +8,12 @@ dataset:
   summary: "TODO: write a one-line summary for Montreal 2015"
   license: UNKNOWN
   derivatives: true
-  organization:
-    name: "TODO: confirm organization name"
-  contact:
-    name: Howard Butler
-    email: howard@hobu.co
-  providers: []  # TODO: confirm provider(s)
+  providers:
+    - organization:
+        name: "TODO: confirm organization name"
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
   tags: [quebec, canada, urban]
   temporal:
     start: 2015-01-01

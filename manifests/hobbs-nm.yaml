@@ -8,13 +8,12 @@ dataset:
   summary: "TODO: write a one-line summary for Hobbs, New Mexico"
   license: UNKNOWN
   derivatives: true
-  organization:
-    name: "Bohannan Huston"
-  contact:
-    name: Howard Butler
-    email: howard@hobu.co
   providers:
-    - name: Bohannan Huston
+    - organization:
+        name: Bohannan Huston
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
       roles: [producer]
       url: https://www.bhinc.com/
   tags: [new-mexico]

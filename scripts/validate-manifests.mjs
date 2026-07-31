@@ -56,27 +56,50 @@ function validateManifest(file, manifest) {
     errors.push(`dataset.tags must be a non-empty array (at least one tag)`);
   }
 
-  // Required per Howard, 2026-08-01: the publishing organization's name.
-  const organization = dataset.organization;
-  if (!organization || typeof organization !== "object") {
-    errors.push(`dataset.organization is required (must have "name")`);
-  } else if (!organization.name || typeof organization.name !== "string") {
-    errors.push(`dataset.organization.name is required`);
-  }
-
-  // Required per Howard, 2026-08-01 (replaced "maintainer" -- same role:
-  // who can update this dataset's manifest/URLs, and who gets emailed if
-  // ingest preflight fails, see worker/src/email.ts and
-  // directoryPreflight.ts).
-  const contact = dataset.contact;
-  if (!contact || typeof contact !== "object") {
-    errors.push(`dataset.contact is required (must have "name" and "email")`);
+  // Required per Howard, 2026-08-02: at least one provider, each an
+  // organization that produced/hosts/licenses this dataset, with an
+  // optional per-provider contact (the person who can actually update
+  // this manifest on that organization's behalf). Replaces the old
+  // top-level `dataset.organization`/`dataset.contact` fields
+  // (2026-08-01) -- folded together since a contact is always
+  // contact-for-some-organization, and a dataset can have more than one
+  // provider (e.g. original surveyor + archive host).
+  const providers = dataset.providers;
+  if (!Array.isArray(providers) || providers.length === 0) {
+    errors.push(`dataset.providers must be a non-empty array (each entry: {organization: {name}, contact?: {name, email}})`);
   } else {
-    if (!contact.name || typeof contact.name !== "string") {
-      errors.push(`dataset.contact.name is required`);
-    }
-    if (!contact.email || typeof contact.email !== "string" || !contact.email.includes("@")) {
-      errors.push(`dataset.contact.email is required and must look like an email address`);
+    let hasContact = false;
+    providers.forEach((p, i) => {
+      if (!p || typeof p !== "object") {
+        errors.push(`dataset.providers[${i}] must be an object`);
+        return;
+      }
+      const organization = p.organization;
+      if (!organization || typeof organization !== "object" || !organization.name || typeof organization.name !== "string") {
+        errors.push(`dataset.providers[${i}].organization.name is required`);
+      }
+      if (p.contact !== undefined) {
+        if (typeof p.contact !== "object" || p.contact === null) {
+          errors.push(`dataset.providers[${i}].contact must be an object if given`);
+        } else {
+          if (!p.contact.name || typeof p.contact.name !== "string") {
+            errors.push(`dataset.providers[${i}].contact.name is required when contact is given`);
+          }
+          if (!p.contact.email || typeof p.contact.email !== "string" || !p.contact.email.includes("@")) {
+            errors.push(`dataset.providers[${i}].contact.email is required and must look like an email address when contact is given`);
+          }
+          hasContact = true;
+        }
+      }
+      if (p.roles !== undefined && !Array.isArray(p.roles)) {
+        errors.push(`dataset.providers[${i}].roles must be an array if given`);
+      }
+      if (p.url !== undefined && typeof p.url !== "string") {
+        errors.push(`dataset.providers[${i}].url must be a string if given`);
+      }
+    });
+    if (!hasContact) {
+      errors.push(`dataset.providers must include at least one entry with a "contact" (used for ingest-failure notifications)`);
     }
   }
 

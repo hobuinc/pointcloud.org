@@ -57,16 +57,16 @@ dataset:
   # for the authoritative text.
   license: "DATA.GOV.HK Terms and Conditions of Use -- free reuse for commercial and non-commercial purposes, with attribution"
   derivatives: true
-  organization:
-    name: "Civil Engineering and Development Department (CEDD), HKSARG"
-  contact:
-    name: Howard Butler
-    email: howard@hobu.co
   providers:
-    - name: Civil Engineering and Development Department (CEDD), HKSARG
+    - organization:
+        name: Civil Engineering and Development Department (CEDD), HKSARG
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
       roles: [producer, licensor]
       url: https://www.ginfo.cedd.gov.hk/geoopendata/eng/LIDAR.aspx
-    - name: DATA.GOV.HK
+    - organization:
+        name: DATA.GOV.HK
       roles: [host]
       url: https://data.gov.hk/en-data/dataset/hk-cedd-csu-lidar
   links:

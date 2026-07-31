@@ -8,13 +8,12 @@ dataset:
   summary: "TODO: write a one-line summary for Boston Lot"
   license: UNKNOWN
   derivatives: true
-  organization:
-    name: "CRREL"
-  contact:
-    name: Howard Butler
-    email: howard@hobu.co
   providers:
-    - name: CRREL
+    - organization:
+        name: CRREL
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
       roles: [producer]
       url: https://www.erdc.usace.army.mil/Locations/CRREL/
   tags: [new-hampshire, crrel]

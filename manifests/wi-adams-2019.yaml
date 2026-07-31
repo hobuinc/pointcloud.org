@@ -8,13 +8,12 @@ dataset:
   summary: "TODO: write a one-line summary for Wisconsin Adams County Lidar 2019"
   license: UNKNOWN
   derivatives: true
-  organization:
-    name: "USGS"
-  contact:
-    name: Howard Butler
-    email: howard@hobu.co
   providers:
-    - name: USGS
+    - organization:
+        name: USGS
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
       roles: [producer, licensor]
       url: https://www.usgs.gov/
   tags: [usgs, wisconsin, 3dep]
