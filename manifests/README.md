@@ -273,6 +273,21 @@ working example of the file form.
 - [`barringer-meteorite-crater/manifest.yaml`](barringer-meteorite-crater/manifest.yaml) --
   a minimal single-asset manifest with a `links`/citation entry.
 
+## Removing a dataset
+
+Delete the whole `manifests/<dataset-id>/` directory and open a PR. This
+repo automatically detects that the PR removes a dataset (rather than
+adding or editing one), labels it `removal`, and posts a comment
+explaining what merging it will do -- one dataset per PR applies to a
+removal exactly like it does to an addition or edit, so a removal PR
+can't be bundled with unrelated changes.
+
+Once merged, the dataset is removed from pointcloud.org's site listing
+and from the root STAC Catalog. Its underlying point-cloud data is
+**not** deleted -- removing a dataset here only removes it from the
+*index* (the site and STAC output), the archived data itself stays in
+storage.
+
 ## License
 
 Manifests describe third-party datasets; each dataset's `license` field

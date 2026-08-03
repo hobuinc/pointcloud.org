@@ -56,6 +56,7 @@ jobs:
     outputs:
       dataset_ids: ${{ steps.changed.outputs.dataset_ids }}
       manifest_files: ${{ steps.changed.outputs.manifest_files }}
+      removed_dataset_ids: ${{ steps.changed.outputs.removed_dataset_ids }}
       too_many_datasets: ${{ steps.changed.outputs.too_many_datasets }}
     steps:
       - name: Determine which dataset directories this PR changed
@@ -69,12 +70,6 @@ jobs:
               pull_number: context.payload.pull_request.number,
               per_page: 100,
             });
-            // A dataset directory counts as "changed" if ANY file under
-            // it changed -- not just manifest.yaml itself -- since
-            // editing a referenced companion file (e.g. a
-            // pdal_filters_file JSON) should re-check/re-trigger for
-            // that dataset too.
-            //
             // Require at least 3 path segments (manifests/<dir>/<file>)
             // before treating segment 2 as a dataset directory name --
             // otherwise a top-level file directly under manifests/ (e.g.
@@ -82,27 +77,46 @@ jobs:
             // mistaken for a directory. Learned from a real failure:
             // PR #5 touched schema.json alongside dataset directories
             // and broke exactly this way.
+            const datasetDirFiles = files.filter(
+              (f) => f.filename.startsWith("manifests/") && f.filename.split("/").length > 2,
+            );
+            // A dataset directory counts as "changed" (added/edited) if
+            // ANY file under it is still present after this PR -- not
+            // just manifest.yaml itself -- since editing a referenced
+            // companion file (e.g. a pdal_filters_file JSON) should
+            // re-check/re-trigger for that dataset too.
             const datasetIds = [
               ...new Set(
-                files
-                  .filter(
-                    (f) =>
-                      f.filename.startsWith("manifests/") &&
-                      f.status !== "removed" &&
-                      f.filename.split("/").length > 2,
-                  )
-                  .map((f) => f.filename.split("/")[1]),
+                datasetDirFiles.filter((f) => f.status !== "removed").map((f) => f.filename.split("/")[1]),
               ),
             ];
+            // A dataset directory counts as "removed" only if EVERY file
+            // this PR touched under it has status "removed" -- i.e. it's
+            // not also in datasetIds above. A PR that deletes one
+            // companion file but leaves manifest.yaml (or adds/edits
+            // another file) in the same directory is an edit, not a
+            // removal, and datasetIds already covers that case.
+            const removedDatasetIds = [
+              ...new Set(
+                datasetDirFiles.filter((f) => f.status === "removed").map((f) => f.filename.split("/")[1]),
+              ),
+            ].filter((id) => !datasetIds.includes(id));
+
             core.setOutput("dataset_ids", JSON.stringify(datasetIds));
             core.setOutput("manifest_files", datasetIds.map((id) => `manifests/${id}/manifest.yaml`).join(" "));
-            // One PR may only add or edit ONE dataset directory -- see
-            // the `reject-multi-dataset-pr` job below, which is the
-            // thing that actually acts on this output (posts a comment
-            // + fails the check). Computed here, once, rather than
-            // repeated as an inline expression on every job below that
-            // needs to also refuse to run for a too-many-datasets PR.
-            core.setOutput("too_many_datasets", datasetIds.length > 1 ? "true" : "false");
+            core.setOutput("removed_dataset_ids", JSON.stringify(removedDatasetIds));
+            // One PR may only add, edit, OR remove ONE dataset directory
+            // -- see the `reject-multi-dataset-pr` job below, which is
+            // the thing that actually acts on this output (posts a
+            // comment + fails the check). Computed here, once, rather
+            // than repeated as an inline expression on every job below
+            // that needs to also refuse to run for a too-many-datasets
+            // PR. Counts distinct directories touched at all (added,
+            // edited, or removed), not just datasetIds -- a PR that
+            // removes one dataset while editing an unrelated one is
+            // still two datasets in one PR.
+            const totalTouched = new Set([...datasetIds, ...removedDatasetIds]).size;
+            core.setOutput("too_many_datasets", totalTouched > 1 ? "true" : "false");
 
   # A PR that touches more than one dataset directory gets rejected
   # outright -- one PR, one dataset, so review/preflight/ingest stay
@@ -133,13 +147,15 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const datasetIds = ${{ needs.changed.outputs.dataset_ids }};
+            const datasetIds = [
+              ...new Set([...${{ needs.changed.outputs.dataset_ids }}, ...${{ needs.changed.outputs.removed_dataset_ids }}]),
+            ];
             const marker = "<!-- pointcloud:too-many-datasets -->";
             const body = [
               marker,
               `This PR touches **${datasetIds.length} dataset directories** (${datasetIds.map((id) => `\`${id}\``).join(", ")}).`,
               "",
-              "Each pull request may only add or edit **one** dataset directory under `manifests/`. Please close this PR and resubmit as separate pull requests, one per dataset.",
+              "Each pull request may only add, edit, or remove **one** dataset directory under `manifests/`. Please close this PR and resubmit as separate pull requests, one per dataset.",
             ].join("\n");
 
             try {
@@ -279,6 +295,114 @@ jobs:
               event_type: "manifest-ingest",
               client_payload: {
                 datasetIds: ${{ needs.changed.outputs.dataset_ids }},
+                sha: "${{ github.event.pull_request.merge_commit_sha }}",
+                prNumber: ${{ github.event.pull_request.number }},
+              },
+            });
+
+  # A PR that removes an entire dataset directory gets a distinguishing
+  # label and a sticky comment explaining what merging it will actually
+  # do -- see manifests/README.md's "Removing a dataset" section. This
+  # is purely informational (no side effects here); the real removal
+  # only happens post-merge, in dispatch-removal below.
+  label-and-comment-removal:
+    needs: changed
+    if: github.event.action != 'closed' && needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    runs-on: ubuntu-latest
+    # Same fork-PR caveat as reject-multi-dataset-pr above: a fork's
+    # default GITHUB_TOKEN is read-only by GitHub platform policy no
+    # matter what's declared here, so labeling/commenting can silently
+    # fail to post for a fork contributor specifically. Nothing else in
+    # this job depends on it succeeding -- dispatch-removal below still
+    # fires on merge either way.
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Label PR and post removal notice
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const removedIds = ${{ needs.changed.outputs.removed_dataset_ids }};
+            const datasetId = removedIds[0];
+
+            try {
+              // Adding a label name that doesn't exist yet on this repo
+              // auto-creates it (with a default color) -- no separate
+              // "ensure label exists" step needed.
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ["removal"],
+              });
+            } catch (err) {
+              core.warning(`could not add the "removal" label: ${err.message}`);
+            }
+
+            const marker = "<!-- pointcloud:removal-notice -->";
+            const body = [
+              marker,
+              `### This PR removes \`${datasetId}\` from the archive index`,
+              "",
+              `Merging this PR deletes \`manifests/${datasetId}/\`, which will:`,
+              "",
+              `- Drop **${datasetId}** from pointcloud.org's site listing (the site is built directly from this directory, so once it's gone here, it's gone there too).`,
+              `- Remove **${datasetId}**'s STAC Collection/Items/GeoParquet from pointcloud.org's infrastructure, and drop it from the root STAC Catalog.`,
+              `- Leave **${datasetId}**'s underlying point-cloud data in storage, untouched -- this only removes it from the *index*, it does not delete archived data.`,
+            ].join("\n");
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (err) {
+              core.warning(`could not post the removal notice comment: ${err.message}`);
+            }
+
+  # Only the merge path dispatches -- an abandoned (closed without
+  # merging) removal PR should never actually remove anything, same
+  # reasoning as dispatch-ingest above. Dispatches straight to the
+  # Worker's /remove endpoint via receive-manifest-removal.yml -- unlike
+  # dispatch-ingest, there's no payload to resolve (nothing left to
+  # read once the directory's deleted), so this needs no intermediate
+  # build-datasets-payload.mjs step, just which dataset id to remove.
+  dispatch-removal:
+    needs: changed
+    if: github.event.pull_request.merged == true && needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch removal to pointcloud.org-infrastructure
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          script: |
+            const removedIds = ${{ needs.changed.outputs.removed_dataset_ids }};
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "manifest-removal",
+              client_payload: {
+                datasetId: removedIds[0],
                 sha: "${{ github.event.pull_request.merge_commit_sha }}",
                 prNumber: ${{ github.event.pull_request.number }},
               },
