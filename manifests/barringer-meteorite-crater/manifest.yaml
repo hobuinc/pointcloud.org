@@ -5,7 +5,7 @@ schema_version: 1
 dataset:
   id: barringer-meteorite-crater
   title: Barringer Meteorite Crater
-  summary: "TODO: write a one-line summary for Barringer Meteorite Crater"
+  summary: "TODO: write a one-line summary for Barringer Meteorite Crater -- multi-dataset-reject test"
   license: UNKNOWN
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
