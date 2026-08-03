@@ -254,7 +254,7 @@ optional; omit anything to use the engine's default.
 
 ```yaml
 derivative_processing:
-  resolution: 1.0   # GSD in meters, overrides each asset's copc.resolution for derivatives only
+  resolution: 1.0   # GSD in meters, overrides each asset's copc.resolution for derivatives only, AND bounds the elevation-stats read used for the hero image/viewer's default color range (see below)
   dtm:
     enabled: true
     pdal_filters:                        # inline, OR:
