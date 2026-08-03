@@ -127,11 +127,33 @@
         },
         "description": {
           "type": "string",
-          "description": "Same Markdown-or-plain-text convention as summary."
+          "description": "Same Markdown-or-plain-text convention as summary, OR a bare relative filename ending in \".md\" (e.g. \"description.md\") pointing at a Markdown file checked into this manifest's own directory alongside manifest.yaml -- same relative-path convention as metadata_links[].href. Use the file form for anything longer than a paragraph or two; the site renders whichever form is given the same way."
         },
         "license": {
-          "type": "string",
-          "minLength": 1
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The same SPDX identifier / Open Data Commons name this field would otherwise be, e.g. \"CC-BY-4.0\" or \"Public Domain (U.S. Government Work)\"."
+                },
+                "url": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "A URL to the actual terms-of-use page for this license, when the bare id alone doesn't point anywhere specific enough -- e.g. USGS-sourced data, whose \"public domain\" status is qualified by USGS's own usage FAQ rather than a single canonical SPDX/ODC license text."
+                }
+              }
+            }
+          ],
+          "description": "A plain string is the common case -- an SPDX identifier (https://spdx.org/licenses/) for a standard software/creative-work license, or an Open Data Commons name (https://opendatacommons.org/licenses/) for a data-specific one, e.g. \"CC0-1.0\", \"CC-BY-4.0\", \"ODC-By-1.0\", \"ODbL-1.0\", \"ODC-PDDL-1.0\", or \"PUBLICDOMAIN\" when nothing more specific applies. Use the {id, url} object form instead when the license needs an accompanying terms-of-use link -- e.g. USGS-sourced data and its derivatives, which should use {\"id\": \"Public Domain (U.S. Government Work)\", \"url\": \"https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map\"}."
         },
         "derivatives": {
           "type": "boolean"
