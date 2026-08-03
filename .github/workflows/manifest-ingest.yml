@@ -45,7 +45,15 @@ jobs:
   # (and its schema.json-isn't-a-directory guard, see the comment
   # inside) lives in exactly one place.
   changed:
-    if: github.event.action != 'closed'
+    # Deliberately no `if:` here (unlike every other job below) --
+    # dispatch-ingest only runs on the closed/merged event, and it
+    # `needs: changed`. A job whose `needs:` dependency was skipped is
+    # itself skipped automatically by GitHub Actions, regardless of its
+    # own `if:` -- discovered the hard way when dispatch-ingest silently
+    # never fired post-merge because this job used to skip on `closed`
+    # too. This job is cheap (one API call), so there's no cost to
+    # always computing dataset_ids/manifest_files and letting every
+    # downstream job's own `if:` decide whether to act on them.
     runs-on: ubuntu-latest
     outputs:
       dataset_ids: ${{ steps.changed.outputs.dataset_ids }}
