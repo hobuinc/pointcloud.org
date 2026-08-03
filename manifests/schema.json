@@ -1,0 +1,252 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/hobuinc/pointcloud.org/main/manifests/schema.json",
+  "title": "pointcloud.org dataset manifest",
+  "description": "Canonical schema for manifests/<id>/manifest.yaml. This is the single source of truth for the manifest format -- scripts/validate-manifests.mjs validates every manifest against this file (via ajv) in CI. worker/src/types.ts's DatasetManifest interface is the Worker-facing mirror of this same shape, EXCEPT for the handful of fields resolved away before a manifest reaches the Worker (metadata_links[].href's relative-path form, and derivative_processing.{dtm,dsm}.pdal_filters_file) -- see this schema's own descriptions on those fields, and PLAN.md's 'Dataset manifest model' section for the full narrative documentation. See README.md for a walkthrough of adding a new dataset.",
+  "type": "object",
+  "required": ["schema_version", "dataset"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Manifest schema version. Always 1 today -- bumped only if a future change is backwards-incompatible enough to need one."
+    },
+    "dataset": { "$ref": "#/definitions/dataset" },
+    "derivative_processing": {
+      "$ref": "#/definitions/derivativeProcessing",
+      "description": "Optional; only consulted when dataset.derivatives is true. Every field falls back to the engine's default when omitted."
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/asset" },
+      "description": "Hand-authored list of individual assets. Exactly one of assets/assets_dir/external_source must be given -- see this schema's root-level oneOf."
+    },
+    "assets_dir": {
+      "$ref": "#/definitions/assetsDir",
+      "description": "Alternative to assets for a large batch of files we already hold in our own bucket (R2-only, see its href pattern below). Exactly one of assets/assets_dir/external_source must be given."
+    },
+    "external_source": {
+      "$ref": "#/definitions/externalSource",
+      "description": "Alternative to assets/assets_dir: a pointer into someone else's already-cataloged STAC document. Exactly one of assets/assets_dir/external_source must be given."
+    }
+  },
+  "oneOf": [
+    {
+      "required": ["assets"],
+      "not": { "anyOf": [{ "required": ["assets_dir"] }, { "required": ["external_source"] }] }
+    },
+    {
+      "required": ["assets_dir"],
+      "not": { "anyOf": [{ "required": ["assets"] }, { "required": ["external_source"] }] }
+    },
+    {
+      "required": ["external_source"],
+      "not": { "anyOf": [{ "required": ["assets"] }, { "required": ["assets_dir"] }] }
+    }
+  ],
+  "definitions": {
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "summary", "license", "derivatives", "providers", "tags"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Dataset id -- must match this manifest's directory name, manifests/<id>/." },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "May contain Markdown -- rendered as sanitized HTML on the site (see site/src/lib/markdown.ts). Plain text is valid Markdown too."
+        },
+        "description": { "type": "string", "description": "Same Markdown-or-plain-text convention as summary." },
+        "license": { "type": "string", "minLength": 1 },
+        "derivatives": { "type": "boolean" },
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/provider" },
+          "contains": { "required": ["contact"] },
+          "description": "At least one entry, each an organization that produced/hosts/licenses this dataset. At least one entry must have a contact (used for ingest-failure notification emails) -- enforced here via 'contains'."
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rel", "href"],
+            "properties": { "rel": { "type": "string" }, "href": { "type": "string" } }
+          }
+        },
+        "tags": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "temporal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "start": { "type": "string" }, "end": { "type": "string" } },
+          "description": "When the data itself was acquired -- distinct from publication_date."
+        },
+        "publication_date": {
+          "type": "string",
+          "description": "ISO 8601 date or timestamp. When this dataset was published/released, as distinct from temporal (when the data was acquired)."
+        },
+        "viewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "enabled": { "type": "boolean" }, "default_asset_id": { "type": "string" } }
+        },
+        "overview_image": {
+          "type": "string",
+          "description": "Same href convention as assets[].href -- our own bucket, a foreign s3:// bucket (falls back to default_endpoint), or a bare https:// URL."
+        },
+        "metadata_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["href"],
+            "properties": {
+              "href": {
+                "type": "string",
+                "minLength": 1,
+                "description": "An absolute https:// URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml (e.g. \"report.pdf\"). Relative paths are resolved by the site build (copied into the site's own static output), never by the Worker."
+              },
+              "title": { "type": "string" }
+            }
+          },
+          "description": "Pointers to externally-hosted or locally-checked-in metadata about this dataset (flight reports, sensor/acquisition documentation, etc.). Purely informational -- never processed by any ingest stage."
+        },
+        "default_endpoint": {
+          "type": "string",
+          "description": "Fallback S3 API endpoint for every href in this manifest that points at a foreign s3:// bucket and doesn't set its own endpoint -- e.g. \"https://<account_id>.r2.cloudflarestorage.com\" for a Cloudflare R2 bucket, or \"https://s3.us-west-2.amazonaws.com\" for an AWS bucket outside the default region. Lets a dataset whose assets all live on one non-owned bucket declare it once instead of repeating it on every asset."
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organization"],
+      "properties": {
+        "organization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": { "name": { "type": "string", "minLength": 1 } }
+        },
+        "contact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "email"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" }
+          },
+          "description": "The person who can actually update this dataset's manifest/URLs on this organization's behalf, if any -- gets emailed if ingest preflight fails."
+        },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["producer", "licensor", "processor", "host"] },
+          "description": "STAC provider roles -- see https://github.com/radiantearth/stac-spec/blob/master/collection-spec/collection-spec.md#provider-object."
+        },
+        "url": { "type": "string" }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "href", "roles", "copc"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "href": {
+          "type": "string",
+          "minLength": 1,
+          "description": "\"s3://pointcloud/...\" (our own bucket), \"s3://<other-bucket>/...\" (foreign bucket, resolved via endpoint/default_endpoint), a bare https:// URL, or a GDAL VSI path (/vsicurl/, /vsis3/, etc.)."
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "S3 API endpoint for a foreign s3:// bucket's href, e.g. \"https://<account_id>.r2.cloudflarestorage.com\" (Cloudflare R2) or \"https://s3.us-west-2.amazonaws.com\" (AWS outside the default region). Falls back to dataset.default_endpoint if omitted; ignored for our own bucket and for https:// /VSI hrefs."
+        },
+        "roles": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "copc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resolution"],
+          "properties": { "resolution": { "type": "number" } }
+        }
+      }
+    },
+    "assetsDir": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href", "roles", "copc"],
+      "properties": {
+        "href": {
+          "type": "string",
+          "pattern": "^s3://pointcloud/",
+          "description": "R2-only -- must be an \"s3://pointcloud/...\" prefix, since this is listed directly via the POINTCLOUD_DATA binding."
+        },
+        "pattern": { "type": "string", "description": "Single leading \"*\" wildcard (suffix match), not a full glob. Defaults to \"*.copc.laz\"." },
+        "roles": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "copc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resolution"],
+          "properties": { "resolution": { "type": "number" } }
+        }
+      }
+    },
+    "externalSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href"],
+      "properties": {
+        "href": { "type": "string", "minLength": 1, "description": "URL to a STAC ItemCollection, Catalog, or Collection JSON document." },
+        "expand": {
+          "type": "boolean",
+          "description": "true: href's Items/child-Collections each become their own pointcloud.org dataset (dry-run only as of 2026-08-01, see externalCatalog.ts). false/omitted: href itself is a single Collection to mirror as this one dataset."
+        }
+      }
+    },
+    "derivativeProcessing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resolution": { "type": "number", "description": "GSD in meters for all derivative rasters. Falls back to each asset's copc.resolution when omitted." },
+        "dtm": { "$ref": "#/definitions/derivativeRaster" },
+        "dsm": { "$ref": "#/definitions/derivativeRaster" },
+        "ambient_occlusion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "whitebox_tool": { "type": "string" },
+            "whitebox_params": { "type": "object" }
+          }
+        }
+      }
+    },
+    "derivativeRaster": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "pdal_filters": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/pdalFilterStage" },
+          "description": "Inline filter stages. Mutually exclusive with pdal_filters_file. Replaces the engine's default pipeline entirely when given -- no 'append to defaults' mode."
+        },
+        "pdal_filters_file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path, relative to this manifest's own directory, to a JSON file containing just the filter-stages array (same shape as pdal_filters, no reader/writer -- the engine picks the reader from the source file type and appends its own writers.gdal stage). Mutually exclusive with pdal_filters. Resolved (read + parsed + inlined as pdal_filters) by build-datasets-payload.mjs before the manifest ever reaches the Worker."
+        }
+      },
+      "not": { "allOf": [{ "required": ["pdal_filters"] }, { "required": ["pdal_filters_file"] }] }
+    },
+    "pdalFilterStage": {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "type": "string" } },
+      "description": "{\"type\": \"filters.range\", ...} etc, as PDAL itself expects. Not validated further -- passed through to the Container verbatim."
+    }
+  }
+}

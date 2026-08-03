@@ -1,13 +1,14 @@
 {
-  "name": "pointcloud-org-manifests",
+  "name": "pointcloud-org-repo-scripts",
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Community-contributed dataset manifests for pointcloud.org -- see README.md for how to add a dataset. This repo holds manifests/*.yaml and their CI validation only; all ingest/build/deploy code and secrets live in the private hobuinc/pointcloud.org-infrastructure repo.",
+  "description": "Root-level scripts shared across CI workflows (manifest validation, site deploy) -- NOT the Worker or the site, see worker/package.json and site/package.json for those.",
   "scripts": {
     "validate-manifests": "node scripts/validate-manifests.mjs"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "js-yaml": "^4.1.0"
   }
 }
