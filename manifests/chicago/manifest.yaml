@@ -1,12 +1,13 @@
 schema_version: 1
 
 # Sourced from USGS 3DEP public EPT (USGS_LPC_IL_4County_Cook_2017_LAS_2019), per the ingest pipeline definition (Chicago.json) stored alongside the data. Resolution 2 below is carried over from that same pipeline definition, not independently confirmed.
-# TODO: confirm license before publishing -- not yet verified for this dataset.
 dataset:
   id: chicago
   title: Chicago Downtown
   summary: "TODO: write a one-line summary for Chicago Downtown"
-  license: UNKNOWN
+  license:
+    id: "Public Domain (U.S. Government Work)"
+    url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
