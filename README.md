@@ -5,10 +5,11 @@ lidar datasets, each with STAC metadata and an in-browser 3D viewer, at
 [pointcloud.org](https://pointcloud.org).
 
 This repo holds the dataset manifests that describe what's in the
-archive. All ingest, build, and deploy automation lives in a separate,
-private repo (`pointcloud.org-infrastructure`) -- this one is just the
+archive. All ingest, build, and deploy automation lives in
+pointcloud.org's own private infrastructure -- this repo is just the
 community-facing catalog: anyone can open a PR here to add or edit a
-dataset.
+dataset, and never needs credentials for or knowledge of how that
+infrastructure works.
 
 ## Adding or editing a dataset
 

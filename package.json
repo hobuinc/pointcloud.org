@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Root-level scripts shared across CI workflows (manifest validation, site deploy) -- NOT the Worker or the site, see worker/package.json and site/package.json for those.",
+  "description": "Root-level scripts for this repo's own CI checks (manifest validation, foreign-URL reachability) -- this repo has no site or ingest-backend code of its own, see manifests/README.md for how those are reached.",
   "scripts": {
     "validate-manifests": "node scripts/validate-manifests.mjs"
   },

@@ -8,6 +8,12 @@ in CI), and so will yours.
 
 ## Adding a dataset
 
+Each pull request may only add or edit **one** dataset directory under
+`manifests/` -- CI rejects a PR that touches more than one (with a
+comment explaining why), so a broken dataset never blocks review of an
+unrelated one sharing the same PR. If you're editing more than one
+dataset, open separate PRs.
+
 1. Create a new directory `manifests/<dataset-id>/` (the directory name
    *is* the dataset id -- `dataset.id` inside `manifest.yaml` must match
    it exactly).
@@ -23,31 +29,37 @@ in CI), and so will yours.
    confirms any foreign/https URL your manifest references is actually
    reachable.
 5. Within a minute or two, a bot comment appears on your PR reporting
-   the *real*, Cloudflare-side checks -- see "How ingest actually
-   happens" below. Push a fixup commit and it updates in place; you
-   don't need to wait for a merge to find out your `assets_dir` prefix
-   has a CRS mismatch or a `pdal_filters_file` has a typo'd option.
+   the *real* checks against pointcloud.org's own infrastructure --
+   see "How ingest actually happens" below. Push a fixup commit and it
+   updates in place; you don't need to wait for a merge to find out
+   your `assets_dir` prefix has a CRS mismatch or a `pdal_filters_file`
+   has a typo'd option.
 6. Once merged (and every check above is green), ingest starts for
    real.
 
 ## How ingest actually happens
 
-This repo holds no Cloudflare credentials at all -- the checks CI can
-run directly here (schema shape, do relative-path references exist
+![Diagram: a manifest PR flows through validation and preflight while open, then through ingest once merged](ingest-flow.svg)
+
+This repo holds no ingest credentials at all -- the checks CI can run
+directly here (schema shape, do relative-path references exist
 locally, is a foreign/https URL reachable) need none, but anything that
-actually has to ask Cloudflare something (does this R2 key exist, do
-these tiles share a coordinate system, does this PDAL filter list
-parse) has to happen on the credentialed side of a cross-repo dispatch
-to the private `pointcloud.org-infrastructure` repo, which talks to the
-ingest Worker directly. Two different dispatches, both firing from
-this repo's `.github/workflows/manifest-ingest.yml`:
+actually has to ask pointcloud.org's storage backend something (does
+this file exist, do these tiles share a coordinate system, does this
+PDAL filter list parse) happens on pointcloud.org's own infrastructure,
+which this repo's `.github/workflows/manifest-ingest.yml` reaches by
+firing a generic "please check/ingest this dataset" dispatch event --
+it holds no credentials for and knows nothing about how that
+infrastructure is actually implemented. Two different dispatches fire
+from the same workflow:
 
 - **Preflight** (`manifest-preflight`) -- fires on every push to an
-  open PR. Read-only: checks R2 file existence, `assets_dir` CRS
-  consistency, and `pdal_filters`/`pdal_filters_file` validity, then
-  reports pass/fail straight onto your PR as an updating comment plus
-  a `pointcloud/*` commit status per check. Never enqueues anything,
-  never emails anyone, however many times you push.
+  open PR. Read-only: checks that referenced data files exist,
+  `assets_dir` CRS consistency, and `pdal_filters`/`pdal_filters_file`
+  validity, then reports pass/fail straight onto your PR as an
+  updating comment plus a `pointcloud/*` commit status per check.
+  Never enqueues anything, never emails anyone, however many times you
+  push.
 - **Ingest** (`manifest-ingest`) -- fires once, when the PR merges.
   Writes the manifest, enqueues real ingest, and posts its own
   outcome comment once the (same) checks resolve for real -- an
@@ -58,7 +70,7 @@ this repo's `.github/workflows/manifest-ingest.yml`:
 If a preflight check ever seems stuck or wrong, look at the
 `pointcloud/*` commit statuses on your PR's latest commit (next to the
 usual CI checks) -- each one names exactly which check it is
-(`pointcloud/r2-existence`, `pointcloud/crs-consistency`,
+(`pointcloud/file-existence`, `pointcloud/crs-consistency`,
 `pointcloud/pdal-filters`).
 
 ## Manifest reference
@@ -98,7 +110,7 @@ Exactly one of these three:
   when you have a small, fixed number of files, or when different files
   need different `label`/`copc.resolution` values.
 - **`assets_dir`** -- for a batch of many same-CRS files already sitting
-  under one prefix in our own R2 bucket (`href` must start with
+  under one prefix in our own bucket (`href` must start with
   `s3://pointcloud/`). Every matching file becomes its own asset
   automatically; before real ingest, every one of them is CRS-checked
   to confirm they actually share a coordinate system.
@@ -131,23 +143,23 @@ An individual asset's `href` can be:
 
 ### Endpoints: discriminating which S3-compatible service hosts an asset
 
-Every dataset's assets live *somewhere* -- a real AWS S3 bucket, this
-project's own Cloudflare R2 bucket, someone else's R2 bucket, or any
-other S3-compatible service. `endpoint` (per-asset) and
+Every dataset's assets live *somewhere* -- a real AWS S3 bucket,
+pointcloud.org's own bucket, someone else's S3-compatible bucket, or
+any other S3-compatible service. `endpoint` (per-asset) and
 `dataset.default_endpoint` (once, for the whole manifest, if every
 asset shares one bucket/region -- saves repeating it) make that
 explicit rather than inferred from the bucket name in `href`:
 
 ```yaml
 dataset:
-  default_endpoint: https://c88d624d8d8f065b1afce73bd44dcf1d.r2.cloudflarestorage.com   # this project's own R2 account
+  default_endpoint: https://<account_id>.example-s3-service.com   # this project's own bucket
 
 # or, per asset, for a bucket that isn't the default (e.g. someone
-# else's Cloudflare R2 bucket):
+# else's S3-compatible bucket):
 assets:
   - id: tile-001
     href: s3://someone-elses-bucket/tile-001.copc.laz
-    endpoint: https://<account_id>.r2.cloudflarestorage.com
+    endpoint: https://<account_id>.example-s3-service.com
     roles: [data]
     copc:
       resolution: 1
@@ -158,12 +170,13 @@ case where omitting this is safe -- that's the implicit fallback.
 Anything else needs it set (here or via `default_endpoint`), or
 resolution will silently produce a broken URL:
 
-- A Cloudflare R2 bucket -- ours or anyone else's, including this
-  repo's own `s3://pointcloud/...` assets, which every manifest sets
-  `default_endpoint` for explicitly, purely so the manifest itself
-  states which account hosts the data. It has no effect on retrieval
-  for `s3://pointcloud/...` specifically -- that's always fetched via
-  a native R2 binding, never over HTTP.
+- A non-AWS S3-compatible bucket -- ours or anyone else's, including
+  this repo's own `s3://pointcloud/...` assets, which every manifest
+  sets `default_endpoint` for explicitly, purely so the manifest
+  itself states which service+account hosts the data. It has no
+  effect on retrieval for `s3://pointcloud/...` specifically -- that's
+  always fetched directly by pointcloud.org's own infrastructure,
+  never over a public HTTP endpoint.
 - An AWS S3 bucket outside the default region -- e.g. USGS 3DEP EPT
   data on `usgs-lidar-public`, which lives in `us-west-2`.
 

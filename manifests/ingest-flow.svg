@@ -1,0 +1,111 @@
+<svg viewBox="0 0 980 620" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="ingest-flow-title ingest-flow-desc">
+  <title id="ingest-flow-title">How a manifest PR becomes real ingest</title>
+  <desc id="ingest-flow-desc">A contributor opens or updates a PR. This repo's own CI validates the manifest and checks foreign URL reachability, then dispatches a preflight to pointcloud.org's infrastructure, which checks file existence, CRS consistency, and PDAL filter validity, reporting results back as a sticky PR comment and commit statuses. If a PR touches more than one dataset it is rejected with a comment asking for separate PRs. Once every check is green and the PR merges, a real ingest dispatch fires, and a completion comment is posted once ingest finishes.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f6feb"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="620" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="490" y="30" text-anchor="middle" font-size="17" font-weight="600" fill="#1f2328">How a manifest PR becomes real ingest</text>
+
+  <!-- Column headers -->
+  <text x="205" y="62" text-anchor="middle" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.5">CONTRIBUTOR</text>
+  <text x="490" y="62" text-anchor="middle" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.5">pointcloud.org (this repo)</text>
+  <text x="815" y="62" text-anchor="middle" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.5">pointcloud.org's infrastructure</text>
+
+  <!-- Lane separators -->
+  <line x1="345" y1="75" x2="345" y2="600" stroke="#d0d7de" stroke-width="1"/>
+  <line x1="655" y1="75" x2="655" y2="600" stroke="#d0d7de" stroke-width="1"/>
+
+  <!-- 1. Contributor opens/pushes PR -->
+  <rect x="95" y="85" width="220" height="60" rx="10" fill="#ddf4ff" stroke="#1f6feb" stroke-width="1.5"/>
+  <text x="205" y="108" text-anchor="middle" font-size="13" font-weight="600" fill="#0b3d91">Open PR / push a commit</text>
+  <text x="205" y="126" text-anchor="middle" font-size="11" fill="#0b3d91">editing manifests/&lt;id&gt;/manifest.yaml</text>
+
+  <!-- 2. validate + check-reachability (parallel) -->
+  <rect x="380" y="85" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
+  <text x="490" y="107" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">validate</text>
+  <text x="490" y="124" text-anchor="middle" font-size="10.5" fill="#57606a">schema shape + local file refs</text>
+
+  <rect x="380" y="155" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
+  <text x="490" y="177" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">check-reachability</text>
+  <text x="490" y="194" text-anchor="middle" font-size="10.5" fill="#57606a">foreign/https URLs, payload size</text>
+
+  <!-- guard: reject multi-dataset PR -->
+  <rect x="380" y="225" width="220" height="55" rx="10" fill="#fff1f0" stroke="#cf222e" stroke-width="1.25"/>
+  <text x="490" y="247" text-anchor="middle" font-size="12.5" font-weight="600" fill="#82071e">one-dataset-per-PR guard</text>
+  <text x="490" y="264" text-anchor="middle" font-size="10.5" fill="#82071e">fails + comments if &gt;1 dataset touched</text>
+
+  <!-- 3. dispatch-preflight -->
+  <rect x="380" y="300" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
+  <text x="490" y="322" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">dispatch-preflight</text>
+  <text x="490" y="339" text-anchor="middle" font-size="10.5" fill="#57606a">fires on every push, no side effects</text>
+
+  <!-- 4. infra: preflight checks -->
+  <rect x="705" y="300" width="220" height="70" rx="10" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
+  <text x="815" y="322" text-anchor="middle" font-size="12.5" font-weight="600" fill="#4d3800">Real preflight checks</text>
+  <text x="815" y="338" text-anchor="middle" font-size="10.5" fill="#4d3800">file existence, CRS consistency,</text>
+  <text x="815" y="352" text-anchor="middle" font-size="10.5" fill="#4d3800">pdal_filters validity</text>
+
+  <!-- comment back to PR -->
+  <rect x="95" y="300" width="220" height="70" rx="10" fill="#ddf4ff" stroke="#1f6feb" stroke-width="1.5"/>
+  <text x="205" y="322" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0b3d91">Sticky PR comment updates</text>
+  <text x="205" y="338" text-anchor="middle" font-size="10.5" fill="#0b3d91">+ pointcloud/* commit statuses</text>
+  <text x="205" y="352" text-anchor="middle" font-size="10.5" fill="#0b3d91">(pass or fail, in place)</text>
+
+  <!-- loop-back: not green yet, push a fixup commit -->
+  <path d="M95,330 C40,330 40,115 95,115" fill="none" stroke="#57606a" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+  <text x="18" y="222" font-size="10.5" fill="#57606a" font-style="italic" transform="rotate(-90 18 222)" text-anchor="middle">not green? push a fixup commit</text>
+
+  <!-- 5. merge -->
+  <rect x="95" y="450" width="220" height="55" rx="10" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="205" y="472" text-anchor="middle" font-size="12.5" font-weight="600" fill="#116329">PR merged</text>
+  <text x="205" y="489" text-anchor="middle" font-size="10.5" fill="#116329">every check above is green</text>
+
+  <!-- 6. dispatch-ingest -->
+  <rect x="380" y="450" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
+  <text x="490" y="472" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">dispatch-ingest</text>
+  <text x="490" y="489" text-anchor="middle" font-size="10.5" fill="#57606a">fires once, at merge</text>
+
+  <!-- 7. infra: real ingest -->
+  <rect x="705" y="450" width="220" height="70" rx="10" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="815" y="472" text-anchor="middle" font-size="12.5" font-weight="600" fill="#116329">Real ingest</text>
+  <text x="815" y="488" text-anchor="middle" font-size="10.5" fill="#116329">writes the dataset, enqueues</text>
+  <text x="815" y="502" text-anchor="middle" font-size="10.5" fill="#116329">metadata + derivative processing</text>
+
+  <!-- 8. completion comment -->
+  <rect x="380" y="545" width="220" height="55" rx="10" fill="#ddf4ff" stroke="#1f6feb" stroke-width="1.5"/>
+  <text x="490" y="567" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0b3d91">Completion comment on PR</text>
+  <text x="490" y="584" text-anchor="middle" font-size="10.5" fill="#0b3d91">queued, or failure + reason</text>
+
+  <!-- Arrows -->
+  <path d="M315,112 L375,112" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M315,120 L360,182 L375,182" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M490,140 L490,150" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M490,210 L490,220" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M490,280 L490,295" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M600,327 L700,327" fill="none" stroke="#9a6700" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M705,345 L340,335 L317,335" fill="none" stroke="#1f6feb" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <path d="M205,370 L205,445" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="222" y="410" font-size="10.5" fill="#1a7f37" font-style="italic">all green -&gt; merge</text>
+  <path d="M315,477 L375,477" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M600,477 L700,477" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M815,520 L815,572 L602,572" fill="none" stroke="#1f6feb" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- reject path -->
+  <path d="M600,252 L680,252" fill="none" stroke="#cf222e" stroke-width="1.5"/>
+  <path d="M680,252 L680,595 L602,595" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="700" y="245" font-size="10.5" fill="#82071e" font-style="italic">close &amp; resubmit as</text>
+  <text x="700" y="258" font-size="10.5" fill="#82071e" font-style="italic">separate PRs</text>
+
+  <!-- legend -->
+  <rect x="705" y="560" width="14" height="14" rx="3" fill="#f6f8fa" stroke="#57606a"/>
+  <text x="725" y="571" font-size="10.5" fill="#57606a">runs in this repo's own CI (no credentials needed)</text>
+</svg>

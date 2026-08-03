@@ -1,13 +1,14 @@
 #!/usr/bin/env node
-// Credential-free pre-merge checks that need no Cloudflare/R2 access at
-// all -- run in the public repo's own `validate` job (see
+// Credential-free pre-merge checks that need no access to
+// pointcloud.org's infrastructure at all -- run in the public repo's
+// own `check-reachability` job (see
 // .github/workflows/manifest-ingest.yml), not dispatched anywhere,
 // since a plain HTTPS HEAD request needs nothing this repo doesn't
 // already have. Complements scripts/validate-manifests.mjs (schema/
-// local-file checks) and the infra-repo-side POST /preflight checks
-// (R2 existence, CRS consistency, pdal_filters validity -- those need
-// real Cloudflare credentials, which this repo deliberately never
-// holds, see manifests/README.md's security-boundary note).
+// local-file checks) and the infrastructure-side preflight checks
+// (file existence, CRS consistency, pdal_filters validity -- those need
+// real credentials, which this repo deliberately never holds, see
+// manifests/README.md's security-boundary note).
 //
 // Checks, per changed dataset:
 //   1. Every foreign (non-"s3://pointcloud/...") asset href, and
@@ -15,10 +16,8 @@
 //      actually reachable (a HEAD request, falling back to a
 //      Range-limited GET for servers that reject HEAD).
 //   2. The dataset's resolved JSON payload size, purely informational
-//      (no hard limit enforced here -- see
-//      project_ingest_pipeline_payload_size_limits memory for why the
-//      actual pipeline no longer cares how big this gets, but a
-//      contributor opening a PR still benefits from seeing it).
+//      (no hard limit enforced here, but a contributor opening a PR
+//      still benefits from seeing it).
 //
 // Usage: node scripts/check-reachability.mjs <manifest.yaml> [...]
 import { readFileSync } from "node:fs";
@@ -35,7 +34,7 @@ if (files.length === 0) {
 const OWN_BUCKET_PREFIX = "s3://pointcloud/";
 const AWS_DEFAULT_ENDPOINT = "https://s3.amazonaws.com";
 
-/** Mirrors worker/src/stages/assetFanout.ts's resolveAssetSource() for the one case this script needs: turning a foreign s3:// href (or a bare https:// one) into a checkable URL. Returns null for our own bucket or a VSI path -- nothing to check here. */
+/** Mirrors the ingest backend's own asset-href resolution for the one case this script needs: turning a foreign s3:// href (or a bare https:// one) into a checkable URL. Returns null for our own bucket or a VSI path -- nothing to check here. */
 function resolveCheckableUrl(href, endpoint) {
   if (href.startsWith(OWN_BUCKET_PREFIX)) return null;
   if (href.startsWith("https://") || href.startsWith("http://")) return href;
@@ -99,7 +98,7 @@ async function main() {
     }
 
     if (urlsToCheck.length === 0) {
-      console.log(`  no foreign/https URLs to check (everything is our own R2 bucket, or nothing set)`);
+      console.log(`  no foreign/https URLs to check (everything is our own bucket, or nothing set)`);
     }
     for (const { label, url } of urlsToCheck) {
       const result = await checkReachable(url);
