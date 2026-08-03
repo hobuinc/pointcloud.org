@@ -3,26 +3,24 @@
 // JSON payload of the shape { datasets: [{ datasetId, manifest }, ...] }
 // to stdout -- this is the client_payload body for the
 // repository_dispatch this repo's .github/workflows/manifest-ingest.yml
-// fires at hobuinc/pointcloud.org-infrastructure once a manifest PR
+// fires at pointcloud.org's private infrastructure once a manifest PR
 // merges.
 //
-// This repo intentionally never talks to the ingest Worker directly
-// (no WORKER_INGEST_SHARED_SECRET lives here) -- see
-// hobuinc/pointcloud.org-infrastructure's
-// .github/workflows/receive-manifest-dispatch.yml, which receives this
-// payload and forwards it to POST /trigger using that secret.
+// This repo intentionally never talks to pointcloud.org's ingest
+// backend directly (no ingest credentials of any kind live here) --
+// the infrastructure side receives this payload and forwards it on to
+// its own ingest endpoint using its own credentials.
 //
 // This is also the ONLY place a manifest's relative file references
-// (derivative_processing.{dtm,dsm}.pdal_filters_file, so far -- see
-// PLAN.md's "Dataset manifest model") get resolved: this script has a
-// real git checkout to read them from, but the Worker never does (see
-// worker/src/types.ts's DatasetManifest doc comment) -- by the time a
-// manifest reaches POST /trigger, every such reference has already been
-// read, parsed, and inlined into the plain field the Worker's type
+// (derivative_processing.{dtm,dsm}.pdal_filters_file, so far) get
+// resolved: this script has a real git checkout to read them from, but
+// the ingest backend never does -- by the time a manifest reaches it,
+// every such reference has already been
+// read, parsed, and inlined into the plain field the ingest backend
 // actually expects. `metadata_links[].href`'s relative-path form is
 // deliberately NOT resolved here -- it's a site-display-only field the
-// Worker never reads at all, resolved instead by the site's own build
-// (see site/scripts/copy-manifest-metadata.mjs).
+// ingest backend never reads at all, resolved instead by the site's own
+// build.
 //
 // Usage: node scripts/build-datasets-payload.mjs <manifest.yaml> [...] > payload.json
 import { readFileSync } from "node:fs";
@@ -40,8 +38,8 @@ if (files.length === 0) {
  * Reads `<manifestDir>/<config.pdal_filters_file>` (if given), parses it
  * as a JSON array of PDAL filter stages, and returns a copy of `config`
  * with `pdal_filters` set from it and `pdal_filters_file` removed --
- * i.e. resolved to the exact shape worker/src/types.ts's
- * DerivativeProcessingConfig expects. Passing both `pdal_filters` and
+ * i.e. resolved to the exact shape the ingest backend's
+ * DerivativeProcessingConfig type expects. Passing both `pdal_filters` and
  * `pdal_filters_file` on the same block is a validate-manifests.mjs
  * error (mutually exclusive), so this never has to reconcile both being
  * present.

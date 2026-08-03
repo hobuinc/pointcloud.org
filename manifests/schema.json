@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/hobuinc/pointcloud.org/main/manifests/schema.json",
   "title": "pointcloud.org dataset manifest",
-  "description": "Canonical schema for manifests/<id>/manifest.yaml. This is the single source of truth for the manifest format -- scripts/validate-manifests.mjs validates every manifest against this file (via ajv) in CI. worker/src/types.ts's DatasetManifest interface is the Worker-facing mirror of this same shape, EXCEPT for the handful of fields resolved away before a manifest reaches the Worker (metadata_links[].href's relative-path form, and derivative_processing.{dtm,dsm}.pdal_filters_file) -- see this schema's own descriptions on those fields, and PLAN.md's 'Dataset manifest model' section for the full narrative documentation. See README.md for a walkthrough of adding a new dataset.",
+  "description": "Canonical schema for manifests/<id>/manifest.yaml. This is the single source of truth for the manifest format -- scripts/validate-manifests.mjs validates every manifest against this file (via ajv) in CI. pointcloud.org's ingest backend mirrors this same shape internally, EXCEPT for the handful of fields resolved away before a manifest reaches it (metadata_links[].href's relative-path form, and derivative_processing.{dtm,dsm}.pdal_filters_file) -- see this schema's own descriptions on those fields. See README.md for a walkthrough of adding a new dataset.",
   "type": "object",
   "required": [
     "schema_version",
@@ -31,7 +31,7 @@
     },
     "assets_dir": {
       "$ref": "#/definitions/assetsDir",
-      "description": "Alternative to assets for a large batch of files we already hold in our own bucket (R2-only, see its href pattern below). Exactly one of assets/assets_dir/external_source must be given."
+      "description": "Alternative to assets for a large batch of files we already hold in our own bucket (see its href pattern below -- this is only supported for our own bucket, not a foreign one). Exactly one of assets/assets_dir/external_source must be given."
     },
     "external_source": {
       "$ref": "#/definitions/externalSource",
@@ -123,7 +123,7 @@
         "summary": {
           "type": "string",
           "minLength": 1,
-          "description": "May contain Markdown -- rendered as sanitized HTML on the site (see site/src/lib/markdown.ts). Plain text is valid Markdown too."
+          "description": "May contain Markdown -- rendered as sanitized HTML on the site. Plain text is valid Markdown too."
         },
         "description": {
           "type": "string",
@@ -220,7 +220,7 @@
               "href": {
                 "type": "string",
                 "minLength": 1,
-                "description": "An absolute https://\u00a0URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml (e.g. \"report.pdf\"). Relative paths are resolved by the site build (copied into the site's own static output), never by the Worker."
+                "description": "An absolute https://\u00a0URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml (e.g. \"report.pdf\"). Relative paths are resolved by the site build (copied into the site's own static output), never by the ingest backend."
               },
               "title": {
                 "type": "string"
@@ -231,7 +231,7 @@
         },
         "default_endpoint": {
           "type": "string",
-          "description": "Fallback S3 API endpoint for every asset href in this manifest that doesn't set its own `endpoint` -- lets a dataset declare, once, which S3-compatible service+account hosts its data: a real AWS S3 bucket in the default region needs no endpoint at all; anything else (this project's own Cloudflare R2 bucket, someone else's R2 bucket, or an AWS bucket outside the default region, e.g. USGS 3DEP EPT data in us-west-2) should set one, e.g. \"https://<account_id>.r2.cloudflarestorage.com\" or \"https://s3.us-west-2.amazonaws.com\". For \"s3://pointcloud/...\" hrefs (this project's own bucket) it's purely informational/explicit -- those are always fetched via a native R2 binding, never over HTTP, so the value has no effect on how that data is actually retrieved."
+          "description": "Fallback S3 API endpoint for every asset href in this manifest that doesn't set its own `endpoint` -- lets a dataset declare, once, which S3-compatible service+account hosts its data: a real AWS S3 bucket in the default region needs no endpoint at all; anything else (this project's own bucket, someone else's S3-compatible bucket, or an AWS bucket outside the default region, e.g. USGS 3DEP EPT data in us-west-2) should set one, e.g. \"https://<account_id>.example-s3-service.com\" or \"https://s3.us-west-2.amazonaws.com\". For \"s3://pointcloud/...\" hrefs (this project's own bucket) it's purely informational/explicit -- those are always fetched directly by pointcloud.org's own infrastructure, never over a public HTTP endpoint, so the value has no effect on how that data is actually retrieved."
         }
       }
     },
@@ -316,7 +316,7 @@
         },
         "endpoint": {
           "type": "string",
-          "description": "S3 API endpoint for this asset's href, e.g. \"https://<account_id>.r2.cloudflarestorage.com\" (Cloudflare R2) or \"https://s3.us-west-2.amazonaws.com\" (AWS outside the default region). Falls back to dataset.default_endpoint if omitted. Set it explicitly for any bucket that isn't a real AWS S3 bucket in the default region -- including this project's own Cloudflare R2 bucket, where it's purely informational (that data is always fetched via a native R2 binding, never over HTTP, so this value has no effect on retrieval, only on which service the manifest documents as the host)."
+          "description": "S3 API endpoint for this asset's href, e.g. \"https://<account_id>.example-s3-service.com\" (a non-AWS S3-compatible service) or \"https://s3.us-west-2.amazonaws.com\" (AWS outside the default region). Falls back to dataset.default_endpoint if omitted. Set it explicitly for any bucket that isn't a real AWS S3 bucket in the default region -- including this project's own bucket, where it's purely informational (that data is always fetched directly by pointcloud.org's own infrastructure, never over a public HTTP endpoint, so this value has no effect on retrieval, only on which service the manifest documents as the host)."
         },
         "roles": {
           "type": "array",
@@ -351,7 +351,7 @@
         "href": {
           "type": "string",
           "pattern": "^s3://pointcloud/",
-          "description": "R2-only -- must be an \"s3://pointcloud/...\" prefix, since this is listed directly via the POINTCLOUD_DATA binding."
+          "description": "Only supported for our own bucket -- must be an \"s3://pointcloud/...\" prefix, since this is listed directly by pointcloud.org's own infrastructure."
         },
         "pattern": {
           "type": "string",
@@ -378,7 +378,7 @@
         },
         "endpoint": {
           "type": "string",
-          "description": "Same meaning as an individual asset's endpoint -- documents which S3-compatible service+account hosts this href. assets_dir is R2-only today (href must be an s3://pointcloud/... prefix, listed via the native R2 binding), so this is purely informational; falls back to dataset.default_endpoint if omitted."
+          "description": "Same meaning as an individual asset's endpoint -- documents which S3-compatible service+account hosts this href. assets_dir is only supported for our own bucket today (href must be an s3://pointcloud/... prefix, listed directly by pointcloud.org's own infrastructure), so this is purely informational; falls back to dataset.default_endpoint if omitted."
         }
       }
     },
@@ -448,7 +448,7 @@
         "pdal_filters_file": {
           "type": "string",
           "minLength": 1,
-          "description": "Path, relative to this manifest's own directory, to a JSON file containing just the filter-stages array (same shape as pdal_filters, no reader/writer -- the engine picks the reader from the source file type and appends its own writers.gdal stage). Mutually exclusive with pdal_filters. Resolved (read + parsed + inlined as pdal_filters) by build-datasets-payload.mjs before the manifest ever reaches the Worker."
+          "description": "Path, relative to this manifest's own directory, to a JSON file containing just the filter-stages array (same shape as pdal_filters, no reader/writer -- the engine picks the reader from the source file type and appends its own writers.gdal stage). Mutually exclusive with pdal_filters. Resolved (read + parsed + inlined as pdal_filters) by build-datasets-payload.mjs before the manifest ever reaches the ingest backend."
         }
       },
       "not": {
