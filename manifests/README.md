@@ -19,12 +19,47 @@ in CI), and so will yours.
 4. Open a pull request. CI (`scripts/validate-manifests.mjs`) validates
    your manifest against [`schema.json`](schema.json) plus a few checks
    schema.json can't express on its own (mostly: do the relative-path
-   references you gave actually exist on disk).
-5. Once merged and CI's validation job is green, ingest starts
-   automatically. If anything about the source data itself fails a
-   preflight check (e.g. mixed coordinate systems under an `assets_dir`
-   prefix), your dataset's primary contact (see `providers[].contact`
-   below) gets an email -- nothing is left partially ingested.
+   references you gave actually exist on disk), and a separate check
+   confirms any foreign/https URL your manifest references is actually
+   reachable.
+5. Within a minute or two, a bot comment appears on your PR reporting
+   the *real*, Cloudflare-side checks -- see "How ingest actually
+   happens" below. Push a fixup commit and it updates in place; you
+   don't need to wait for a merge to find out your `assets_dir` prefix
+   has a CRS mismatch or a `pdal_filters_file` has a typo'd option.
+6. Once merged (and every check above is green), ingest starts for
+   real.
+
+## How ingest actually happens
+
+This repo holds no Cloudflare credentials at all -- the checks CI can
+run directly here (schema shape, do relative-path references exist
+locally, is a foreign/https URL reachable) need none, but anything that
+actually has to ask Cloudflare something (does this R2 key exist, do
+these tiles share a coordinate system, does this PDAL filter list
+parse) has to happen on the credentialed side of a cross-repo dispatch
+to the private `pointcloud.org-infrastructure` repo, which talks to the
+ingest Worker directly. Two different dispatches, both firing from
+this repo's `.github/workflows/manifest-ingest.yml`:
+
+- **Preflight** (`manifest-preflight`) -- fires on every push to an
+  open PR. Read-only: checks R2 file existence, `assets_dir` CRS
+  consistency, and `pdal_filters`/`pdal_filters_file` validity, then
+  reports pass/fail straight onto your PR as an updating comment plus
+  a `pointcloud/*` commit status per check. Never enqueues anything,
+  never emails anyone, however many times you push.
+- **Ingest** (`manifest-ingest`) -- fires once, when the PR merges.
+  Writes the manifest, enqueues real ingest, and posts its own
+  outcome comment once the (same) checks resolve for real -- an
+  `assets_dir` dataset's CRS check is asynchronous and can take a
+  while for a large prefix, so this comment may land after the
+  workflow run that triggered it has already finished.
+
+If a preflight check ever seems stuck or wrong, look at the
+`pointcloud/*` commit statuses on your PR's latest commit (next to the
+usual CI checks) -- each one names exactly which check it is
+(`pointcloud/r2-existence`, `pointcloud/crs-consistency`,
+`pointcloud/pdal-filters`).
 
 ## Manifest reference
 
