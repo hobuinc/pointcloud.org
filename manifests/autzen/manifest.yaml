@@ -32,4 +32,4 @@ assets:
     href: s3://pointcloud/autzen/autzen-classified.copc.laz
     roles: [data]
     copc:
-      resolution: 1  # TODO: confirm intended resolution -- preflight-e2e-test marker, harmless
+      resolution: 1  # TODO: confirm intended resolution
