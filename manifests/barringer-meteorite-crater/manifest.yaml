@@ -1,12 +1,18 @@
 schema_version: 1
 
-# NCALM acquisition, 2010. Filename encodes an OpenTopography-style DOI (10.5069/G9V40S4C) -- confirm and link to the actual OpenTopography dataset page.
-# TODO: confirm license before publishing -- not yet verified for this dataset.
+# NCALM acquisition, 2010. Metadata cross-checked 2026-08-03 against
+# OpenTopography's own dataset page (OT Collection ID OT.112011.26912.3):
+# https://portal.opentopography.org/datasetMetadata?otCollectionID=OT.112011.26912.3
 dataset:
   id: barringer-meteorite-crater
   title: Barringer Meteorite Crater
-  summary: "TODO: write a one-line summary for Barringer Meteorite Crater"
-  license: UNKNOWN
+  summary: >
+    Airborne lidar survey of the Barringer Meteorite Crater (Meteor
+    Crater), Arizona, and its surrounding ejecta blanket, collected by
+    the National Center for Airborne Laser Mapping (NCALM).
+  license:
+    id: CC-BY-4.0
+    url: https://creativecommons.org/licenses/by/4.0/
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
@@ -27,9 +33,28 @@ dataset:
   links:
     - rel: cite-as
       href: https://doi.org/10.5069/G9V40S4C
+  citations:
+    - text: >
+        Palucis, M. (2011). Meteor Crater, AZ. National Center for
+        Airborne Laser Mapping (NCALM). Distributed by OpenTopography.
+        https://doi.org/10.5069/G9V40S4C
+      url: https://doi.org/10.5069/G9V40S4C
+  acknowledgement: >
+    Lidar data acquisition and processing completed by the National
+    Center for Airborne Laser Mapping (NCALM - https://ncalm.cive.uh.edu).
+    NCALM funding provided by NSF's Division of Earth Sciences,
+    Instrumentation and Facilities Program, EAR-1043051.
+  publication_date: 2011-12-01
   tags: [arizona, ncalm, impact-crater]
   temporal:
-    start: 2010-01-01
+    start: 2010-03-12
+  spatial_reference:
+    id: "EPSG:26912"
+    vertical_id: "EPSG:5703"
+    url: https://spatialreference.org/ref/epsg/26912/
+  metadata_links:
+    - title: Survey report
+      href: https://cloud.sdsc.edu/v1/AUTH_opentopography/www/metadata/NCALM/Report_2010_S002_071_Palucis.pdf
   viewer:
     enabled: true
     default_asset_id: barringer-meteorite-crater-ncalm-2010-10-5069-g9v40s4c
