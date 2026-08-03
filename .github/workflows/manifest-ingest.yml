@@ -1,29 +1,27 @@
 # Validates manifests/**/manifest.yaml on every PR that touches
-# manifests/, dispatches a dry-run preflight (real Cloudflare-side
-# checks, reported straight onto the PR) on every push while it's still
-# open, then -- once such a PR is merged -- fires the real ingest
-# dispatch at the private hobuinc/pointcloud.org-infrastructure repo,
-# which actually talks to the ingest Worker (see that repo's
-# .github/workflows/receive-manifest-dispatch.yml).
+# manifests/, dispatches a dry-run preflight (the real checks against
+# pointcloud.org's own infrastructure, reported straight onto the PR)
+# on every push while it's still open, then -- once such a PR is
+# merged -- fires the real ingest dispatch at pointcloud.org's private
+# infrastructure, which does the actual work.
 #
-# This repo is the public, community-facing half of the
-# pointcloud.org / pointcloud.org-infrastructure split (2026-07-31):
+# This repo is the public, community-facing half of pointcloud.org:
 # anyone can open a PR here adding or editing a dataset under
 # manifests/<id>/ (manifest.yaml plus whatever companion files it
 # references by relative path -- see README.md), but this repo holds no
-# infrastructure secrets other than INFRA_DISPATCH_TOKEN, a
-# fine-grained PAT scoped *only* to hobuinc/pointcloud.org-infrastructure
-# with Contents: Read and write (the permission the dispatches endpoint
-# checks) -- it cannot read or modify anything else there, and cannot
-# touch Cloudflare, R2, or the Worker directly. That's deliberate: any
-# check that needs real Cloudflare credentials (does this R2 key exist,
-# do these tiles share a CRS, does this PDAL filter list parse) has to
-# happen on the infra-repo side of a dispatch, not here, even for a
-# dry-run -- see manifests/README.md's "How ingest actually happens"
-# section. Only checks needing zero credentials (schema shape, do
-# relative-path references exist locally, is a foreign/https URL
-# reachable) run directly in this repo, safely runnable for any PR
-# including one from a fork.
+# infrastructure secrets or credentials of any kind -- it only holds
+# INFRA_DISPATCH_TOKEN, a fine-grained PAT scoped *only* to the private
+# infrastructure repo's dispatches endpoint (Contents: Read and write,
+# the permission that endpoint checks) -- it cannot read or modify
+# anything else there. That's deliberate: any check that needs real
+# credentials (does this file exist, do these tiles share a CRS, does
+# this PDAL filter list parse) has to happen on the infrastructure side
+# of a dispatch, not here, even for a dry-run -- see
+# manifests/README.md's "How ingest actually happens" section. Only
+# checks needing zero credentials (schema shape, do relative-path
+# references exist locally, is a foreign/https URL reachable) run
+# directly in this repo, safely runnable for any PR including one from
+# a fork.
 #
 # Jobs are gated by `if:`, not separate `on:` triggers, since several
 # need to react to the same `pull_request` event differently depending
@@ -58,6 +56,7 @@ jobs:
     outputs:
       dataset_ids: ${{ steps.changed.outputs.dataset_ids }}
       manifest_files: ${{ steps.changed.outputs.manifest_files }}
+      too_many_datasets: ${{ steps.changed.outputs.too_many_datasets }}
     steps:
       - name: Determine which dataset directories this PR changed
         id: changed
@@ -97,12 +96,95 @@ jobs:
             ];
             core.setOutput("dataset_ids", JSON.stringify(datasetIds));
             core.setOutput("manifest_files", datasetIds.map((id) => `manifests/${id}/manifest.yaml`).join(" "));
+            // One PR may only add or edit ONE dataset directory -- see
+            // the `reject-multi-dataset-pr` job below, which is the
+            // thing that actually acts on this output (posts a comment
+            // + fails the check). Computed here, once, rather than
+            // repeated as an inline expression on every job below that
+            // needs to also refuse to run for a too-many-datasets PR.
+            core.setOutput("too_many_datasets", datasetIds.length > 1 ? "true" : "false");
 
-  # Schema/local-file validation -- deliberately validates every
-  # manifest in the repo, not just changed ones (cheap, and catches a
-  # change to schema.json itself breaking something it didn't touch
-  # directly).
+  # A PR that touches more than one dataset directory gets rejected
+  # outright -- one PR, one dataset, so review/preflight/ingest stay
+  # scoped to a single change a maintainer can reason about (and so a
+  # broken dataset never blocks an unrelated one sharing the same PR).
+  # This posts the explanation as a sticky comment (same pattern as the
+  # preflight/ingest-result comments the infrastructure side posts) and
+  # fails the check so it shows up as a red X on the PR, in addition to
+  # scripts/validate-manifests.mjs's own refusal (see its doc comment)
+  # if `validate` also happens to run against the same file list.
+  reject-multi-dataset-pr:
+    needs: changed
+    if: github.event.action != 'closed' && needs.changed.outputs.too_many_datasets == 'true'
+    runs-on: ubuntu-latest
+    # Explicit, in addition to (not instead of) `validate`'s own refusal
+    # to run against multiple manifest paths (see
+    # scripts/validate-manifests.mjs's doc comment): a PR from a fork
+    # gets a read-only GITHUB_TOKEN by GitHub's own platform policy, no
+    # matter what's declared here, so the comment/fail steps below can
+    # silently fail to post for a fork contributor specifically. This
+    # `permissions:` block covers the common case (a same-repo PR, or a
+    # maintainer's own branch); `validate` failing is the fallback
+    # signal that still works even when this one's comment can't post.
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment and fail
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const datasetIds = ${{ needs.changed.outputs.dataset_ids }};
+            const marker = "<!-- pointcloud:too-many-datasets -->";
+            const body = [
+              marker,
+              `This PR touches **${datasetIds.length} dataset directories** (${datasetIds.map((id) => `\`${id}\``).join(", ")}).`,
+              "",
+              "Each pull request may only add or edit **one** dataset directory under `manifests/`. Please close this PR and resubmit as separate pull requests, one per dataset.",
+            ].join("\n");
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (err) {
+              // Most likely a fork PR's read-only token -- see this
+              // job's permissions comment above. Don't let a failed
+              // comment post mask the real signal below.
+              core.warning(`could not post the too-many-datasets comment: ${err.message}`);
+            }
+
+            core.setFailed(`This PR touches ${datasetIds.length} dataset directories -- split it into separate PRs.`);
+
+  # Schema/local-file validation. Scoped to just the dataset(s) this PR
+  # changed (via the `changed` job's manifest_files output) -- when
+  # manifest_files is empty (e.g. a PR that only touches
+  # manifests/schema.json), scripts/validate-manifests.mjs falls back to
+  # validating every manifest in the repo instead, since a schema change
+  # can break a dataset it didn't directly touch. When manifest_files
+  # names more than one dataset, the script refuses outright (see its
+  # own doc comment) -- that PR needs `reject-multi-dataset-pr` below,
+  # not a real validation run.
   validate:
+    needs: changed
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
@@ -112,14 +194,14 @@ jobs:
           node-version: 24
       - name: Install dependencies (js-yaml, ajv, for the validator)
         run: npm install
-      - name: Validate manifests
-        run: node scripts/validate-manifests.mjs
+      - name: Validate manifest(s)
+        run: node scripts/validate-manifests.mjs ${{ needs.changed.outputs.manifest_files }}
 
   # Foreign/https URL reachability + a resolved-payload-size estimate --
-  # both need zero Cloudflare credentials (a plain HEAD request, a
+  # both need zero infrastructure credentials (a plain HEAD request, a
   # local JSON.stringify), so they run directly here rather than as
-  # part of the credentialed infra-repo preflight. Only checks the
-  # datasets this PR actually changed, not the whole repo (unlike
+  # part of the credentialed infrastructure-side preflight. Only checks
+  # the datasets this PR actually changed, not the whole repo (unlike
   # validate above) -- no reason to re-check a foreign URL nothing in
   # this PR touched.
   check-reachability:
@@ -138,14 +220,14 @@ jobs:
 
   # Dry-run counterpart to dispatch-ingest below -- fires on every push
   # to an open PR (not just merge), so a contributor gets real feedback
-  # (does this R2 key exist, do these tiles share a CRS, does this PDAL
+  # (does this file exist, do these tiles share a CRS, does this PDAL
   # filter list parse) while they're still iterating, not only after
   # merge. Gated on validate passing first: no reason to spend a
-  # Cloudflare-side preflight run on a manifest that's already
-  # structurally broken. See PLAN.md's "PR feedback" section.
+  # preflight run on a manifest that's already structurally broken.
+  # See manifests/README.md's "How ingest actually happens" section.
   dispatch-preflight:
     needs: [changed, validate]
-    if: github.event.action != 'closed' && needs.changed.outputs.dataset_ids != '[]'
+    if: github.event.action != 'closed' && needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch preflight to pointcloud.org-infrastructure
@@ -167,7 +249,7 @@ jobs:
     # Only the merge path dispatches -- a PR that's closed without
     # merging (abandoned) should never kick off ingest.
     needs: changed
-    if: github.event.pull_request.merged == true && needs.changed.outputs.dataset_ids != '[]'
+    if: github.event.pull_request.merged == true && needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     steps:
       # No checkout/npm install here -- this job used to build the full
@@ -184,7 +266,7 @@ jobs:
       # many datasets or how large any one of them is. The infra repo's
       # receive-manifest-dispatch.yml checks out this repo itself at
       # that commit and resolves the real payload there, right before
-      # POSTing it to the Worker directly (no GitHub API size limit on
+      # POSTing it to the ingest backend directly (no GitHub API size limit on
       # an ordinary HTTPS POST body).
       - name: Dispatch ingest to pointcloud.org-infrastructure
         uses: actions/github-script@v7
