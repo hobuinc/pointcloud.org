@@ -79,9 +79,24 @@ jobs:
             // dataset's directory below rather than trusting the
             // specific changed filename, so this works the same whether
             // manifest.yaml itself or just a companion file changed.
+            //
+            // Require at least 3 path segments (manifests/<dir>/<file>)
+            // before treating segment 2 as a dataset directory name --
+            // otherwise a top-level file directly under manifests/ (e.g.
+            // manifests/schema.json, which has only 2 segments) gets
+            // mistaken for a directory, producing an invalid path like
+            // "manifests/schema.json/manifest.yaml" that crashes
+            // build-datasets-payload.mjs with ENOTDIR. Learned from a
+            // real failure: PR #5 touched schema.json alongside dataset
+            // directories and broke exactly this way.
             const changedDirs = new Set(
               files
-                .filter((f) => f.filename.startsWith("manifests/") && f.status !== "removed")
+                .filter(
+                  (f) =>
+                    f.filename.startsWith("manifests/") &&
+                    f.status !== "removed" &&
+                    f.filename.split("/").length > 2,
+                )
                 .map((f) => f.filename.split("/").slice(0, 2).join("/")),
             );
             const manifestFiles = [...changedDirs].map((dir) => `${dir}/manifest.yaml`);

@@ -8,6 +8,14 @@ dataset:
   summary: "TODO: write a one-line summary for Montreal 2015"
   license: UNKNOWN
   derivatives: true
+  # Every asset below lives in our own Cloudflare R2 bucket, but this
+  # is declared explicitly (rather than inferred from the "pointcloud"
+  # bucket name) so every dataset uniformly states which S3-compatible
+  # service+account hosts it -- AWS S3, this Cloudflare R2 account, or
+  # someone else's bucket. Purely informational for this bucket: the
+  # Worker always fetches "s3://pointcloud/..." via its native R2
+  # binding, never over HTTP, so this value has no effect on fetching.
+  default_endpoint: https://c88d624d8d8f065b1afce73bd44dcf1d.r2.cloudflarestorage.com
   providers:
     - organization:
         name: "TODO: confirm organization name"
