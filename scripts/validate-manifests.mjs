@@ -126,6 +126,30 @@ function describeManifest(manifest) {
 function validateLocalReferences(manifestDir, manifest, log) {
   const errors = [];
 
+  // dataset.description may be a bare relative filename ending in ".md"
+  // (e.g. "description.md") instead of inline text -- see
+  // schema.json's description of this field. A simple filename-shaped
+  // pattern (no whitespace, ends in .md) is enough to distinguish "this
+  // is a file reference" from "this is inline Markdown that happens to
+  // mention a .md file", since inline prose containing whitespace never
+  // matches it.
+  const description = manifest?.dataset?.description;
+  const isDescriptionFileRef = typeof description === "string" && /^[^\s]+\.md$/i.test(description);
+  if (description === undefined) {
+    log("no dataset.description -- nothing to check");
+  } else if (isDescriptionFileRef) {
+    const target = path.join(manifestDir, description);
+    const rel = path.relative(REPO_ROOT, target);
+    if (!existsSync(target)) {
+      log(`  dataset.description "${description}" -> ${rel}: MISSING`);
+      errors.push(`dataset.description "${description}" looks like a relative Markdown file reference but does not exist at ${rel}`);
+    } else {
+      log(`  dataset.description "${description}" -> ${rel}: exists`);
+    }
+  } else {
+    log("dataset.description is inline text, not a file reference -- nothing to check");
+  }
+
   const metadataLinks = manifest?.dataset?.metadata_links ?? [];
   const relativeLinks = metadataLinks.filter((link) => link?.href && !/^https?:\/\//.test(link.href));
   if (metadataLinks.length === 0) {
