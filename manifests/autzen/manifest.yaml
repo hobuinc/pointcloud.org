@@ -5,7 +5,7 @@ schema_version: 1
 dataset:
   id: autzen
   title: Autzen Stadium
-  summary: "TODO: write a one-line summary for Autzen Stadium"
+  summary: "TODO: write a one-line summary for Autzen Stadium -- test-single-dataset-v2 marker"
   license: UNKNOWN
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
