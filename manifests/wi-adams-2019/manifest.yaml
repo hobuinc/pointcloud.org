@@ -1,7 +1,6 @@
 schema_version: 1
 
 # USGS 3DEP lidar, Adams County, Wisconsin, 2019 acquisition (USGS_LPC_WI_Statewide_2019 tile series).
-# TODO: confirm license before publishing -- not yet verified for this dataset.
 #
 # 2026-08-03 (round 2, after fixing the Cloudflare Queues 128KB message
 # cap in handleTrigger/handleIngestRequest): re-verifying end-to-end.
@@ -15,7 +14,9 @@ dataset:
   id: wi-adams-2019
   title: Wisconsin Adams County Lidar 2019
   summary: "TODO: write a one-line summary for Wisconsin Adams County Lidar 2019"
-  license: UNKNOWN
+  license:
+    id: "Public Domain (U.S. Government Work)"
+    url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
