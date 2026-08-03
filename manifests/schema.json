@@ -251,6 +251,10 @@
           },
           "description": "Pointers to externally-hosted or locally-checked-in metadata about this dataset (flight reports, sensor/acquisition documentation, etc.). Purely informational -- never processed by any ingest stage."
         },
+        "federate": {
+          "type": "boolean",
+          "description": "Optional, default false. When true, ingest copies every asset's bytes from wherever this manifest currently points (a foreign bucket or a bare https:// URL) into pointcloud.org's own storage once, at ingest time, then treats that copy as authoritative for all further processing (metadata extraction, derivatives, the hero image) instead of re-fetching from the original source. Meaningful only for a hand-authored `assets` list (assets_dir is already restricted to our own bucket; external_source points at someone else's whole STAC catalog, not individual assets) -- ignored otherwise. Use this when a dataset's original host is not reliably durable (a personal server, a time-limited hosting arrangement) and the intent is to actually archive a copy here, not just link out to it."
+        },
         "default_endpoint": {
           "type": "string",
           "description": "Fallback S3 API endpoint for every asset href in this manifest that doesn't set its own `endpoint` -- lets a dataset declare, once, which S3-compatible service+account hosts its data: a real AWS S3 bucket in the default region needs no endpoint at all; anything else (this project's own bucket, someone else's S3-compatible bucket, or an AWS bucket outside the default region, e.g. USGS 3DEP EPT data in us-west-2) should set one, e.g. \"https://<account_id>.example-s3-service.com\" or \"https://s3.us-west-2.amazonaws.com\". For \"s3://pointcloud/...\" hrefs (this project's own bucket) it's purely informational/explicit -- those are always fetched directly by pointcloud.org's own infrastructure, never over a public HTTP endpoint, so the value has no effect on how that data is actually retrieved."

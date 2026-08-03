@@ -226,7 +226,19 @@ dataset:
       href: https://example.org/reports/my-dataset.pdf       # remote, OR:
     - title: Local acquisition notes
       href: acquisition-notes.pdf                             # relative to this manifest's own directory
+  federate: true   # copy this dataset's data into pointcloud.org's own storage at ingest time
 ```
+
+`federate: true` (default false; only meaningful alongside a
+hand-authored `assets` list) tells ingest to copy every asset's bytes
+from wherever this manifest currently points into pointcloud.org's own
+storage once, at ingest time, rather than continuing to read from the
+original source on every later access. Use it when a dataset's source
+host isn't reliably durable long-term (a personal server, a
+time-limited hosting arrangement) and the intent is to actually archive
+a copy here. A PR whose manifest sets this gets a `federate` label and
+a comment calling it out, since it's a meaningfully different
+commitment than the default (link out, don't copy).
 
 A `metadata_links[].href` may be a plain relative filename -- put the
 file in `manifests/<dataset-id>/` alongside `manifest.yaml`, and the

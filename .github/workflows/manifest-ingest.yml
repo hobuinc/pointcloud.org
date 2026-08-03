@@ -234,6 +234,29 @@ jobs:
       - name: Check foreign/https URL reachability + payload size
         run: node scripts/check-reachability.mjs ${{ needs.changed.outputs.manifest_files }}
 
+  # Does this PR's manifest request `dataset.federate: true`? Credential-
+  # free (just reading YAML this PR already touched), so runs directly
+  # here -- feeds label-and-comment-federate below, which is the thing
+  # that actually posts something about it. Kept as its own tiny job
+  # (rather than a step inside check-reachability) so its boolean output
+  # is easy to depend on independently.
+  check-federate:
+    needs: changed
+    if: github.event.action != 'closed' && needs.changed.outputs.manifest_files != ''
+    runs-on: ubuntu-latest
+    outputs:
+      federate: ${{ steps.check.outputs.federate }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies (js-yaml)
+        run: npm install
+      - name: Check dataset.federate
+        id: check
+        run: echo "federate=$(node scripts/check-federate.mjs ${{ needs.changed.outputs.manifest_files }})" >> "$GITHUB_OUTPUT"
+
   # Dry-run counterpart to dispatch-ingest below -- fires on every push
   # to an open PR (not just merge), so a contributor gets real feedback
   # (does this file exist, do these tiles share a CRS, does this PDAL
@@ -407,3 +430,74 @@ jobs:
                 prNumber: ${{ github.event.pull_request.number }},
               },
             });
+
+  # A PR whose manifest sets `dataset.federate: true` gets a
+  # distinguishing label and a sticky comment explaining that merging it
+  # will copy the dataset's source data into pointcloud.org's own
+  # storage, not just reference it -- see schema.json's `federate`
+  # description and worker/src/stages/federation.ts's doc comment for
+  # what that actually does. Purely informational; the real copy only
+  # happens post-merge, as part of real ingest (federation.ts runs
+  # inside ingestRequest.ts, before any other stage).
+  label-and-comment-federate:
+    needs: [changed, check-federate]
+    if: github.event.action != 'closed' && needs.check-federate.outputs.federate == 'true' && needs.changed.outputs.too_many_datasets != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Label PR and post federate notice
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const datasetIds = ${{ needs.changed.outputs.dataset_ids }};
+            const datasetId = datasetIds[0];
+
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ["federate"],
+              });
+            } catch (err) {
+              core.warning(`could not add the "federate" label: ${err.message}`);
+            }
+
+            const marker = "<!-- pointcloud:federate-notice -->";
+            const body = [
+              marker,
+              `### This PR requests \`federate: true\` for \`${datasetId}\``,
+              "",
+              `Merging this PR will copy **${datasetId}**'s asset data from wherever this manifest currently points into pointcloud.org's own storage, at ingest time -- not just link out to it. Every later stage (metadata extraction, derivatives, the hero image) will then use that copy, and pointcloud.org's own record of this dataset's manifest will be rewritten to point at it.`,
+              "",
+              "This does not change the manifest committed in this repo -- only pointcloud.org's own internal record of where the data actually lives.",
+            ].join("\n");
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (err) {
+              core.warning(`could not post the federate notice comment: ${err.message}`);
+            }
