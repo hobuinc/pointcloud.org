@@ -29,7 +29,7 @@ dataset:
 
 assets:
   - id: autzen-classified
-    href: s3://pointcloud/autzen/DOES-NOT-EXIST.copc.laz
+    href: s3://pointcloud/autzen/autzen-classified.copc.laz
     roles: [data]
     copc:
       resolution: 1  # TODO: confirm intended resolution
