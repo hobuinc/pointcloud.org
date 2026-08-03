@@ -12,15 +12,17 @@
 // its own ingest endpoint using its own credentials.
 //
 // This is also the ONLY place a manifest's relative file references
-// (derivative_processing.{dtm,dsm}.pdal_filters_file, so far) get
-// resolved: this script has a real git checkout to read them from, but
-// the ingest backend never does -- by the time a manifest reaches it,
-// every such reference has already been
-// read, parsed, and inlined into the plain field the ingest backend
-// actually expects. `metadata_links[].href`'s relative-path form is
-// deliberately NOT resolved here -- it's a site-display-only field the
-// ingest backend never reads at all, resolved instead by the site's own
-// build.
+// (derivative_processing.{dtm,dsm}.pdal_filters_file,
+// dataset.description's bare-".md"-filename form) get resolved: this
+// script has a real git checkout to read them from, but the ingest
+// backend never does -- by the time a manifest reaches it, every such
+// reference has already been read and inlined into the plain field the
+// ingest backend actually expects (dataset.description ends up as
+// ordinary Markdown text either way, so the STAC Collection this
+// produces carries real content, not a meaningless bare filename).
+// `metadata_links[].href`'s relative-path form is deliberately NOT
+// resolved here -- it's a site-display-only field the ingest backend
+// never reads at all, resolved instead by the site's own build.
 //
 // Usage: node scripts/build-datasets-payload.mjs <manifest.yaml> [...] > payload.json
 import { readFileSync } from "node:fs";
@@ -52,6 +54,21 @@ function resolveFilterStages(manifestDir, config) {
   return { ...rest, pdal_filters: filters };
 }
 
+/**
+ * If `description` is a bare relative filename ending in ".md" (see
+ * schema.json's description of dataset.description, and
+ * validate-manifests.mjs's matching check), reads that file's content
+ * from `manifestDir` and returns it in its place. Otherwise returns
+ * `description` unchanged (inline text, or absent). Same
+ * read-and-inline treatment as resolveFilterStages() above, for the
+ * same reason: the ingest backend has no git checkout of this repo to
+ * resolve a relative path against.
+ */
+function resolveDescription(manifestDir, description) {
+  if (typeof description !== "string" || !/^[^\s]+\.md$/i.test(description)) return description;
+  return readFileSync(path.join(manifestDir, description), "utf-8");
+}
+
 const datasets = files.map((file) => {
   const raw = readFileSync(file, "utf-8");
   const manifest = loadYaml(raw);
@@ -62,6 +79,13 @@ const datasets = files.map((file) => {
       ...manifest.derivative_processing,
       dtm: resolveFilterStages(manifestDir, manifest.derivative_processing.dtm),
       dsm: resolveFilterStages(manifestDir, manifest.derivative_processing.dsm),
+    };
+  }
+
+  if (manifest?.dataset) {
+    manifest.dataset = {
+      ...manifest.dataset,
+      description: resolveDescription(manifestDir, manifest.dataset.description),
     };
   }
 
