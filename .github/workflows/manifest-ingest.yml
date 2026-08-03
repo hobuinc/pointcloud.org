@@ -1,8 +1,9 @@
 # Validates manifests/**/manifest.yaml on every PR that touches
-# manifests/, then -- once such a PR is merged -- fires a
-# repository_dispatch at the private
-# hobuinc/pointcloud.org-infrastructure repo, which actually talks to
-# the ingest Worker (see that repo's
+# manifests/, dispatches a dry-run preflight (real Cloudflare-side
+# checks, reported straight onto the PR) on every push while it's still
+# open, then -- once such a PR is merged -- fires the real ingest
+# dispatch at the private hobuinc/pointcloud.org-infrastructure repo,
+# which actually talks to the ingest Worker (see that repo's
 # .github/workflows/receive-manifest-dispatch.yml).
 #
 # This repo is the public, community-facing half of the
@@ -14,12 +15,21 @@
 # fine-grained PAT scoped *only* to hobuinc/pointcloud.org-infrastructure
 # with Contents: Read and write (the permission the dispatches endpoint
 # checks) -- it cannot read or modify anything else there, and cannot
-# touch Cloudflare, the Worker, or the site build directly.
+# touch Cloudflare, R2, or the Worker directly. That's deliberate: any
+# check that needs real Cloudflare credentials (does this R2 key exist,
+# do these tiles share a CRS, does this PDAL filter list parse) has to
+# happen on the infra-repo side of a dispatch, not here, even for a
+# dry-run -- see manifests/README.md's "How ingest actually happens"
+# section. Only checks needing zero credentials (schema shape, do
+# relative-path references exist locally, is a foreign/https URL
+# reachable) run directly in this repo, safely runnable for any PR
+# including one from a fork.
 #
-# Two separate jobs, gated by `if:`, rather than two separate `on:`
-# triggers -- both need to react to the same `pull_request` event
-# (opened/updated vs. merged-and-closed), and GitHub Actions can't
-# express "run this job only when merged" as a top-level `on:` filter.
+# Jobs are gated by `if:`, not separate `on:` triggers, since several
+# need to react to the same `pull_request` event differently depending
+# on whether it's an open/update or a merge-close, and GitHub Actions
+# can't express "run this job only when merged" (or "only when NOT
+# closed") as a top-level `on:` filter.
 name: Manifest ingest
 
 on:
@@ -30,43 +40,17 @@ on:
       - "manifests/**"
 
 jobs:
-  validate:
-    # Runs on every open/update, not just the initial open -- catches a
-    # fixup pushed after review comments, same as any other CI check.
+  # Which dataset directories this PR actually touches -- shared by
+  # every other job below so the "changed directory" detection logic
+  # (and its schema.json-isn't-a-directory guard, see the comment
+  # inside) lives in exactly one place.
+  changed:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    outputs:
+      dataset_ids: ${{ steps.changed.outputs.dataset_ids }}
+      manifest_files: ${{ steps.changed.outputs.manifest_files }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install dependencies (js-yaml, ajv, for the validator)
-        run: npm install
-      - name: Validate manifests
-        run: node scripts/validate-manifests.mjs
-
-  dispatch-ingest:
-    # Only the merge path dispatches -- a PR that's closed without
-    # merging (abandoned) should never kick off ingest.
-    if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    steps:
-      # No checkout/npm install here -- this job used to build the full
-      # resolved dataset payload (including every asset entry) itself
-      # and hand it to the infra repo as `client_payload`, but GitHub
-      # rejects a repository_dispatch whose client_payload is too large
-      # ("client_payload is too large", a 422) well under the size of
-      # even a single real dataset here -- wi-adams-2019's ~1,026
-      # hand-authored assets alone serialize to ~150KB, and a PR that
-      # touches several dataset directories at once (e.g. one that also
-      # edits schema.json, like the PR that first exposed this) makes it
-      # worse. client_payload now carries only which dataset IDs changed
-      # and the merge commit they changed at -- tiny regardless of how
-      # many datasets or how large any one of them is. The infra repo's
-      # receive-manifest-dispatch.yml checks out this repo itself at
-      # that commit and resolves the real payload there, right before
-      # POSTing it to the Worker directly (no GitHub API size limit on
-      # an ordinary HTTPS POST body).
       - name: Determine which dataset directories this PR changed
         id: changed
         uses: actions/github-script@v7
@@ -81,8 +65,8 @@ jobs:
             // A dataset directory counts as "changed" if ANY file under
             // it changed -- not just manifest.yaml itself -- since
             // editing a referenced companion file (e.g. a
-            // pdal_filters_file JSON) should re-trigger ingest for that
-            // dataset too.
+            // pdal_filters_file JSON) should re-check/re-trigger for
+            // that dataset too.
             //
             // Require at least 3 path segments (manifests/<dir>/<file>)
             // before treating segment 2 as a dataset directory name --
@@ -104,9 +88,97 @@ jobs:
               ),
             ];
             core.setOutput("dataset_ids", JSON.stringify(datasetIds));
+            core.setOutput("manifest_files", datasetIds.map((id) => `manifests/${id}/manifest.yaml`).join(" "));
 
+  # Schema/local-file validation -- deliberately validates every
+  # manifest in the repo, not just changed ones (cheap, and catches a
+  # change to schema.json itself breaking something it didn't touch
+  # directly).
+  validate:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies (js-yaml, ajv, for the validator)
+        run: npm install
+      - name: Validate manifests
+        run: node scripts/validate-manifests.mjs
+
+  # Foreign/https URL reachability + a resolved-payload-size estimate --
+  # both need zero Cloudflare credentials (a plain HEAD request, a
+  # local JSON.stringify), so they run directly here rather than as
+  # part of the credentialed infra-repo preflight. Only checks the
+  # datasets this PR actually changed, not the whole repo (unlike
+  # validate above) -- no reason to re-check a foreign URL nothing in
+  # this PR touched.
+  check-reachability:
+    needs: changed
+    if: github.event.action != 'closed' && needs.changed.outputs.manifest_files != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies (js-yaml)
+        run: npm install
+      - name: Check foreign/https URL reachability + payload size
+        run: node scripts/check-reachability.mjs ${{ needs.changed.outputs.manifest_files }}
+
+  # Dry-run counterpart to dispatch-ingest below -- fires on every push
+  # to an open PR (not just merge), so a contributor gets real feedback
+  # (does this R2 key exist, do these tiles share a CRS, does this PDAL
+  # filter list parse) while they're still iterating, not only after
+  # merge. Gated on validate passing first: no reason to spend a
+  # Cloudflare-side preflight run on a manifest that's already
+  # structurally broken. See PLAN.md's "PR feedback" section.
+  dispatch-preflight:
+    needs: [changed, validate]
+    if: github.event.action != 'closed' && needs.changed.outputs.dataset_ids != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch preflight to pointcloud.org-infrastructure
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "manifest-preflight",
+              client_payload: {
+                datasetIds: ${{ needs.changed.outputs.dataset_ids }},
+                prNumber: ${{ github.event.pull_request.number }},
+              },
+            });
+
+  dispatch-ingest:
+    # Only the merge path dispatches -- a PR that's closed without
+    # merging (abandoned) should never kick off ingest.
+    needs: changed
+    if: github.event.pull_request.merged == true && needs.changed.outputs.dataset_ids != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      # No checkout/npm install here -- this job used to build the full
+      # resolved dataset payload (including every asset entry) itself
+      # and hand it to the infra repo as `client_payload`, but GitHub
+      # rejects a repository_dispatch whose client_payload is too large
+      # ("client_payload is too large", a 422) well under the size of
+      # even a single real dataset here -- wi-adams-2019's ~1,026
+      # hand-authored assets alone serialize to ~150KB, and a PR that
+      # touches several dataset directories at once (e.g. one that also
+      # edits schema.json, like the PR that first exposed this) makes it
+      # worse. client_payload now carries only which dataset IDs changed
+      # and the merge commit they changed at -- tiny regardless of how
+      # many datasets or how large any one of them is. The infra repo's
+      # receive-manifest-dispatch.yml checks out this repo itself at
+      # that commit and resolves the real payload there, right before
+      # POSTing it to the Worker directly (no GitHub API size limit on
+      # an ordinary HTTPS POST body).
       - name: Dispatch ingest to pointcloud.org-infrastructure
-        if: steps.changed.outputs.dataset_ids != '[]'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
@@ -116,7 +188,8 @@ jobs:
               repo: "pointcloud.org-infrastructure",
               event_type: "manifest-ingest",
               client_payload: {
-                datasetIds: ${{ steps.changed.outputs.dataset_ids }},
+                datasetIds: ${{ needs.changed.outputs.dataset_ids }},
                 sha: "${{ github.event.pull_request.merge_commit_sha }}",
+                prNumber: ${{ github.event.pull_request.number }},
               },
             });
