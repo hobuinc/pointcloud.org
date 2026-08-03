@@ -51,15 +51,22 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install dependencies (js-yaml, for build-datasets-payload.mjs)
-        run: npm install
-
+      # No checkout/npm install here -- this job used to build the full
+      # resolved dataset payload (including every asset entry) itself
+      # and hand it to the infra repo as `client_payload`, but GitHub
+      # rejects a repository_dispatch whose client_payload is too large
+      # ("client_payload is too large", a 422) well under the size of
+      # even a single real dataset here -- wi-adams-2019's ~1,026
+      # hand-authored assets alone serialize to ~150KB, and a PR that
+      # touches several dataset directories at once (e.g. one that also
+      # edits schema.json, like the PR that first exposed this) makes it
+      # worse. client_payload now carries only which dataset IDs changed
+      # and the merge commit they changed at -- tiny regardless of how
+      # many datasets or how large any one of them is. The infra repo's
+      # receive-manifest-dispatch.yml checks out this repo itself at
+      # that commit and resolves the real payload there, right before
+      # POSTing it to the Worker directly (no GitHub API size limit on
+      # an ordinary HTTPS POST body).
       - name: Determine which dataset directories this PR changed
         id: changed
         uses: actions/github-script@v7
@@ -75,54 +82,41 @@ jobs:
             // it changed -- not just manifest.yaml itself -- since
             // editing a referenced companion file (e.g. a
             // pdal_filters_file JSON) should re-trigger ingest for that
-            // dataset too. Always re-reads manifest.yaml from the
-            // dataset's directory below rather than trusting the
-            // specific changed filename, so this works the same whether
-            // manifest.yaml itself or just a companion file changed.
+            // dataset too.
             //
             // Require at least 3 path segments (manifests/<dir>/<file>)
             // before treating segment 2 as a dataset directory name --
             // otherwise a top-level file directly under manifests/ (e.g.
             // manifests/schema.json, which has only 2 segments) gets
-            // mistaken for a directory, producing an invalid path like
-            // "manifests/schema.json/manifest.yaml" that crashes
-            // build-datasets-payload.mjs with ENOTDIR. Learned from a
-            // real failure: PR #5 touched schema.json alongside dataset
-            // directories and broke exactly this way.
-            const changedDirs = new Set(
-              files
-                .filter(
-                  (f) =>
-                    f.filename.startsWith("manifests/") &&
-                    f.status !== "removed" &&
-                    f.filename.split("/").length > 2,
-                )
-                .map((f) => f.filename.split("/").slice(0, 2).join("/")),
-            );
-            const manifestFiles = [...changedDirs].map((dir) => `${dir}/manifest.yaml`);
-            core.setOutput("files", manifestFiles.join(" "));
-
-      - name: Build datasets payload
-        id: payload
-        if: steps.changed.outputs.files != ''
-        run: |
-          echo "json<<PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
-          node scripts/build-datasets-payload.mjs ${{ steps.changed.outputs.files }} >> "$GITHUB_OUTPUT"
-          echo "" >> "$GITHUB_OUTPUT"
-          echo "PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
+            // mistaken for a directory. Learned from a real failure:
+            // PR #5 touched schema.json alongside dataset directories
+            // and broke exactly this way.
+            const datasetIds = [
+              ...new Set(
+                files
+                  .filter(
+                    (f) =>
+                      f.filename.startsWith("manifests/") &&
+                      f.status !== "removed" &&
+                      f.filename.split("/").length > 2,
+                  )
+                  .map((f) => f.filename.split("/")[1]),
+              ),
+            ];
+            core.setOutput("dataset_ids", JSON.stringify(datasetIds));
 
       - name: Dispatch ingest to pointcloud.org-infrastructure
-        if: steps.changed.outputs.files != ''
+        if: steps.changed.outputs.dataset_ids != '[]'
         uses: actions/github-script@v7
-        env:
-          DATASETS_JSON: ${{ steps.payload.outputs.json }}
         with:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
           script: |
-            const payload = JSON.parse(process.env.DATASETS_JSON);
             await github.rest.repos.createDispatchEvent({
               owner: "hobuinc",
               repo: "pointcloud.org-infrastructure",
               event_type: "manifest-ingest",
-              client_payload: payload,
+              client_payload: {
+                datasetIds: ${{ steps.changed.outputs.dataset_ids }},
+                sha: "${{ github.event.pull_request.merge_commit_sha }}",
+              },
             });
