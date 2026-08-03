@@ -227,7 +227,31 @@ dataset:
     - title: Local acquisition notes
       href: acquisition-notes.pdf                             # relative to this manifest's own directory
   federate: true   # copy this dataset's data into pointcloud.org's own storage at ingest time
+  citations:                       # how this dataset (or work based on it) should be cited
+    - text: >
+        Doe, J. (2020). My Dataset. Some Org. https://doi.org/10.5555/example
+      url: https://doi.org/10.5555/example   # optional, per-citation
+  acknowledgement: >
+    Funding text a data provider asks to be included whenever this
+    dataset is used, e.g. a granting agency and award number.
+  spatial_reference:
+    id: "EPSG:26912"                                   # only when the source metadata states one explicitly
+    vertical_id: "EPSG:5703"                            # optional, if documented separately
+    url: https://spatialreference.org/ref/epsg/26912/   # only when id resolves to a real reference page
 ```
+
+`citations` is separate from `links`' `rel: cite-as` entry: `cite-as` is a
+single canonical machine-readable DOI link, while `citations` is one or
+more human-readable attribution strings (the dataset's own citation,
+and/or papers that used it) rendered as-is on the dataset's page.
+
+`spatial_reference` is purely informational -- it doesn't feed any
+ingest-time CRS handling (that comes from the data itself, and from
+`assets_dir`'s CRS-consistency preflight check). Only set it when the
+source metadata for a dataset states an explicit id (an EPSG code is
+the common case); don't guess one from the data. Only set `url` when
+that id actually resolves to a reference page, e.g.
+`https://spatialreference.org/ref/epsg/<code>/` for an EPSG code.
 
 `federate: true` (default false; only meaningful alongside a
 hand-authored `assets` list) tells ingest to copy every asset's bytes

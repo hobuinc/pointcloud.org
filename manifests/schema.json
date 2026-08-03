@@ -190,6 +190,35 @@
             }
           }
         },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Full formatted citation text (author, year, title, publisher, etc.). May contain Markdown."
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional URL for this specific citation, e.g. a DOI landing page or a paper's page."
+              }
+            }
+          },
+          "description": "How this dataset (and/or related publications) should be cited, rendered as-is on the dataset's page. Distinct from links[] with rel: cite-as, which is a single canonical machine-readable DOI link -- citations here are human-readable attribution text, and there can be more than one (the dataset's own citation plus any papers that used it)."
+        },
+        "acknowledgement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Funding/acknowledgement text a data provider asks to be included whenever the dataset is used (e.g. a granting agency and award number). Same Markdown-or-plain-text convention as summary. Rendered on the dataset's page."
+        },
         "tags": {
           "type": "array",
           "minItems": 1,
@@ -250,6 +279,31 @@
             }
           },
           "description": "Pointers to externally-hosted or locally-checked-in metadata about this dataset (flight reports, sensor/acquisition documentation, etc.). Purely informational -- never processed by any ingest stage."
+        },
+        "spatial_reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "An explicit horizontal spatial reference identifier for this dataset, e.g. \"EPSG:26912\". Only set this when the source metadata states one explicitly -- don't infer/guess it from the data itself."
+            },
+            "vertical_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Optional separate vertical CRS identifier, e.g. \"EPSG:5703\" for NAVD88 (GEOID 09), when the source metadata documents one distinct from the horizontal id."
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Link to this id's definition, e.g. \"https://spatialreference.org/ref/epsg/26912/\" -- include only when id is a well-known identifier (like an EPSG code) that actually resolves to a spatialreference.org (or similar) reference page."
+            }
+          },
+          "description": "Optional. Documents the dataset's coordinate reference system explicitly, for human readers -- purely informational, not consulted by any ingest stage (real CRS handling comes from the data itself / assets_dir's CRS-consistency preflight check)."
         },
         "federate": {
           "type": "boolean",
