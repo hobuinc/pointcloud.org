@@ -102,6 +102,31 @@ assets:                        # see "Describing the data" below
       resolution: 1
 ```
 
+### License
+
+`license` is usually a plain identifier -- an [SPDX id](https://spdx.org/licenses/)
+for a standard license (`CC0-1.0`, `CC-BY-4.0`, `CC-BY-SA-4.0`, ...) or
+an [Open Data Commons](https://opendatacommons.org/licenses/) name for
+a data-specific one (`ODC-By-1.0`, `ODbL-1.0`, `ODC-PDDL-1.0`), or
+`PUBLICDOMAIN` when nothing more specific applies:
+
+```yaml
+dataset:
+  license: CC-BY-4.0
+```
+
+Use the `{id, url}` object form instead when the license needs an
+accompanying terms-of-use link -- e.g. USGS-sourced data, whose
+public-domain status is qualified by USGS's own usage FAQ rather than
+one canonical license text:
+
+```yaml
+dataset:
+  license:
+    id: "Public Domain (U.S. Government Work)"
+    url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+```
+
 ### Describing the data
 
 Exactly one of these three:
@@ -185,7 +210,10 @@ resolution will silently produce a broken URL:
 ```yaml
 dataset:
   description: >
-    Longer Markdown description, rendered on the dataset's page.
+    Longer Markdown description, rendered on the dataset's page. Or,
+    instead of inline text, a bare relative filename ending in ".md"
+    (e.g. "description.md") checked into this manifest's own directory
+    -- use that for anything longer than a paragraph or two.
   publication_date: 2021-06-01   # when published, vs. temporal (when acquired)
   temporal:
     start: 2020-03-01
