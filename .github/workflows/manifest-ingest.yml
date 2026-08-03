@@ -1,18 +1,20 @@
-# Validates manifests/*.yaml on every PR that touches them, then --
-# once such a PR is merged -- fires a repository_dispatch at the
-# private hobuinc/pointcloud.org-infrastructure repo, which actually
-# talks to the ingest Worker (see that repo's
+# Validates manifests/**/manifest.yaml on every PR that touches
+# manifests/, then -- once such a PR is merged -- fires a
+# repository_dispatch at the private
+# hobuinc/pointcloud.org-infrastructure repo, which actually talks to
+# the ingest Worker (see that repo's
 # .github/workflows/receive-manifest-dispatch.yml).
 #
 # This repo is the public, community-facing half of the
 # pointcloud.org / pointcloud.org-infrastructure split (2026-07-31):
-# anyone can open a PR here adding or editing a manifests/*.yaml file,
-# but this repo holds no infrastructure secrets other than
-# INFRA_DISPATCH_TOKEN, a fine-grained PAT scoped *only* to
-# hobuinc/pointcloud.org-infrastructure with Contents: Read and write
-# (the permission the dispatches endpoint checks) -- it cannot read or
-# modify anything else there, and cannot touch Cloudflare, the Worker,
-# or the site build directly.
+# anyone can open a PR here adding or editing a dataset under
+# manifests/<id>/ (manifest.yaml plus whatever companion files it
+# references by relative path -- see README.md), but this repo holds no
+# infrastructure secrets other than INFRA_DISPATCH_TOKEN, a
+# fine-grained PAT scoped *only* to hobuinc/pointcloud.org-infrastructure
+# with Contents: Read and write (the permission the dispatches endpoint
+# checks) -- it cannot read or modify anything else there, and cannot
+# touch Cloudflare, the Worker, or the site build directly.
 #
 # Two separate jobs, gated by `if:`, rather than two separate `on:`
 # triggers -- both need to react to the same `pull_request` event
@@ -25,7 +27,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
     paths:
-      - "manifests/*.yaml"
+      - "manifests/**"
 
 jobs:
   validate:
@@ -38,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies (js-yaml, for the validator)
+      - name: Install dependencies (js-yaml, ajv, for the validator)
         run: npm install
       - name: Validate manifests
         run: node scripts/validate-manifests.mjs
@@ -58,7 +60,7 @@ jobs:
       - name: Install dependencies (js-yaml, for build-datasets-payload.mjs)
         run: npm install
 
-      - name: Determine which manifest files this PR changed
+      - name: Determine which dataset directories this PR changed
         id: changed
         uses: actions/github-script@v7
         with:
@@ -69,9 +71,20 @@ jobs:
               pull_number: context.payload.pull_request.number,
               per_page: 100,
             });
-            const manifestFiles = files
-              .filter((f) => f.filename.startsWith("manifests/") && f.filename.endsWith(".yaml") && f.status !== "removed")
-              .map((f) => f.filename);
+            // A dataset directory counts as "changed" if ANY file under
+            // it changed -- not just manifest.yaml itself -- since
+            // editing a referenced companion file (e.g. a
+            // pdal_filters_file JSON) should re-trigger ingest for that
+            // dataset too. Always re-reads manifest.yaml from the
+            // dataset's directory below rather than trusting the
+            // specific changed filename, so this works the same whether
+            // manifest.yaml itself or just a companion file changed.
+            const changedDirs = new Set(
+              files
+                .filter((f) => f.filename.startsWith("manifests/") && f.status !== "removed")
+                .map((f) => f.filename.split("/").slice(0, 2).join("/")),
+            );
+            const manifestFiles = [...changedDirs].map((dir) => `${dir}/manifest.yaml`);
             core.setOutput("files", manifestFiles.join(" "));
 
       - name: Build datasets payload

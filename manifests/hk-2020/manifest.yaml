@@ -21,8 +21,9 @@
 # per "hk-2020/*.copc.laz" key in R2, but ONLY after
 # directoryPreflight.ts confirms every one of those files reports the
 # same CRS via `pdal info` -- if any file errors out or disagrees, the
-# whole ingest aborts and dataset.maintainer above gets emailed instead,
-# nothing gets ingested partially. This manifest is now ready to submit
+# whole ingest aborts and this dataset's primary provider contact (see
+# providers[] below) gets emailed instead, nothing gets ingested
+# partially. This manifest is now ready to submit
 # as-is (once the 3 remaining normalization stragglers noted above are
 # retried, or even before -- they simply won't be picked up by the
 # listing until they exist as "*.copc.laz" keys).
@@ -105,11 +106,13 @@ derivative_processing:
     # tiles are prone to spurious low returns that a generic default
     # pipeline may not handle well. This REPLACES the default pipeline
     # entirely, it doesn't layer on top of it.
-    pdal_filters:
-      - type: filters.range
-        limits: "Classification[2:2]"
-      - type: filters.smrf
-        ignore: "Classification[7:7]"
+    #
+    # Given as a file (relative to this manifest's own directory,
+    # manifests/hk-2020/) rather than inlined -- see PLAN.md's "Dataset
+    # manifest model" for the pdal_filters/pdal_filters_file tradeoff.
+    # dtm-filters.json holds just the two filter stages below (no
+    # reader/writer -- the engine composes those itself).
+    pdal_filters_file: dtm-filters.json
   dsm:
     enabled: true
     # No pdal_filters override -- the engine's default first-return/
