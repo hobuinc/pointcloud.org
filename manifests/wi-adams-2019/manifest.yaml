@@ -2,6 +2,12 @@ schema_version: 1
 
 # USGS 3DEP lidar, Adams County, Wisconsin, 2019 acquisition (USGS_LPC_WI_Statewide_2019 tile series).
 # TODO: confirm license before publishing -- not yet verified for this dataset.
+#
+# 2026-08-03: real end-to-end verification that a dataset this large
+# (~1,026 hand-authored assets) can go through validate -> dispatch ->
+# receive-manifest-dispatch -> POST /trigger without hitting GitHub's
+# repository_dispatch client_payload size limit -- this dataset alone
+# is exactly what first exposed that bug.
 dataset:
   id: wi-adams-2019
   title: Wisconsin Adams County Lidar 2019
