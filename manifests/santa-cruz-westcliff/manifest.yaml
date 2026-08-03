@@ -1,12 +1,13 @@
 schema_version: 1
 
 # Three epochs, all USGS-attributed per filename: 2016 (lidar first-return) and 2022/2023 (SfM ultra-high-density point clouds).
-# TODO: confirm license before publishing -- not yet verified for this dataset.
 dataset:
   id: santa-cruz-westcliff
   title: Santa Cruz West Cliff
   summary: "TODO: write a one-line summary for Santa Cruz West Cliff"
-  license: UNKNOWN
+  license:
+    id: "Public Domain (U.S. Government Work)"
+    url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
