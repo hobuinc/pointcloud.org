@@ -60,7 +60,10 @@ pointcloud_org:
   # Copies this asset's bytes into pointcloud.org's own storage at
   # ingest time rather than continuing to stream it from GitHub's LFS
   # media host on every later access -- per explicit request, since this
-  # is the archival copy pointcloud.org intends to keep long-term.
+  # is the archival copy pointcloud.org intends to keep long-term. The
+  # federated copy is stored under the source URL's own basename (e.g.
+  # "autzen-2023.copc.laz"), matching what any non-federated asset
+  # would be named.
   federate: true
 
 items:
