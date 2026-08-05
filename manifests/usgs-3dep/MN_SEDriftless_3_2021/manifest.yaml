@@ -1,6 +1,8 @@
 schema_version: 2
 
-# USGS 3DEP acquisition, Woolpert 2021-2022. Metadata cross-checked
+# USGS 3DEP acquisition, Woolpert 2021-2022. Re-triggered 2026-08-05 after
+# a container fix (EPT resolution-bound fallback hardening) landed.
+# Metadata cross-checked
 # 2026-08-05 against the FGDC/ISO XML at
 # https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/vendor_provided_xml/MN%20SE%20Driftless%203%202021_WU228972_Classified_Point_Cloud_Metadata.xml
 # and the EPT resource's own ept.json. First pointcloud.org dataset
