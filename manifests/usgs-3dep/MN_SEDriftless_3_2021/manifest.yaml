@@ -1,0 +1,77 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, Woolpert 2021-2022. Metadata cross-checked
+# 2026-08-05 against the FGDC/ISO XML at
+# https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/vendor_provided_xml/MN%20SE%20Driftless%203%202021_WU228972_Classified_Point_Cloud_Metadata.xml
+# and the EPT resource's own ept.json. First pointcloud.org dataset
+# ingested via `ept_source` -- see manifests/README.md.
+type: Collection
+stac_version: "1.0.0"
+id: MN_SEDriftless_3_2021
+title: MN SE Driftless 3 2021 Lidar
+description: >
+  Classified airborne lidar point cloud covering approximately 1,838
+  square miles of the southeast Minnesota driftless area (Fillmore,
+  Freeborn, and Mower Counties), collected May 2021 through May 2022 by
+  Woolpert for the USGS 3D Elevation Program (3DEP) as part of the "MN
+  SE Driftless 2021 B21" project. Acquired at QL1 spec (aggregate
+  nominal pulse spacing 0.35m, 8 points/m^2) meeting the USGS National
+  Geospatial Program Base Lidar Specification, Version 2022 revision A.
+  Served here directly from USGS's public Entwine Point Tile (EPT)
+  bucket via `ept_source` -- not copied into pointcloud.org's own
+  storage -- so this Collection's single item streams live from USGS's
+  own infrastructure.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [minnesota, usgs, 3dep, lidar, driftless-area, entwine, ept, woolpert]
+providers:
+  - name: Woolpert
+    roles: [producer]
+    url: https://woolpert.com/
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+links:
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/USGS_MN_SEDriftless_3_2021_Summary_Report.pdf
+extent:
+  temporal:
+    interval:
+      - ["2021-05-08", "2022-05-15"]
+
+"sci:citation": >
+  Woolpert (2022). MN SE Driftless 3 2021; Project ID: 222538 -
+  WU228972; Classified Point Cloud. U.S. Geological Survey 3D Elevation
+  Program. USGS Contract No. G16PC00022, Task Order No. 140G0221F0253.
+
+pointcloud_org:
+  derivatives: false
+  publication_date: 2022-12-31
+  spatial_reference:
+    id: "EPSG:6344"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6344
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated
+    for products derived from these data.
+  metadata_links:
+    - title: FGDC Classified Point Cloud Metadata (XML)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/vendor_provided_xml/MN%20SE%20Driftless%203%202021_WU228972_Classified_Point_Cloud_Metadata.xml"
+    - title: USGS Lidar Mapping Report
+      href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/MN_SE_Driftless_3_2021_Lidar_Mapping_Report_WU228972.pdf
+    - title: USGS Summary Report
+      href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/USGS_MN_SEDriftless_3_2021_Summary_Report.pdf
+  viewer:
+    enabled: true
+    default_asset_id: MN_SEDriftless_3_2021
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_SEDriftless_3_2021/ept.json
+  ept_catalog_id: MN_SEDriftless_3_2021
+  pointcloud_org:
+    copc_resolution: 1
