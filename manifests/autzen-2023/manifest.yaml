@@ -57,6 +57,7 @@ pointcloud_org:
       href: https://raw.githubusercontent.com/PDAL/data/main/autzen/2023/OLC_Willamette_Valley_Classified_LAS_Metadata.xml
   viewer:
     enabled: true
+    default_asset_id: autzen-2023
   # Copies this asset's bytes into pointcloud.org's own storage at
   # ingest time rather than continuing to stream it from GitHub's LFS
   # media host on every later access -- per explicit request, since this
