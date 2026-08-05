@@ -25,9 +25,9 @@ if (files.length === 0) {
 let anyFederate = false;
 for (const file of files) {
   const manifest = loadYaml(readFileSync(file, "utf-8"));
-  if (manifest?.dataset?.federate === true) {
+  if (manifest?.pointcloud_org?.federate === true) {
     anyFederate = true;
-    console.error(`[check-federate] ${manifest.dataset.id ?? file}: dataset.federate is true`);
+    console.error(`[check-federate] ${manifest.id ?? file}: pointcloud_org.federate is true`);
   }
 }
 

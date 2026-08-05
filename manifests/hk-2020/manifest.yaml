@@ -1,62 +1,50 @@
-# Example/seed manifest for the hk-2020 dataset -- see PLAN.md's "Dataset
-# manifest model" and "Raw data normalization" sections.
-#
-# Status as of 2026-07-30 ~21:41 UTC: the raw-LAS/LAZ -> COPC
-# normalization batch for this dataset is effectively complete -- 3,311
-# of 3,314 tiles converted (99.9%). The hourly
-# "hk-2020-normalization-check" scheduled task self-disabled once the
-# queue backlog reached 0. The 3 remaining tiles all failed for the same
-# already-fixed, transient reason (container-concurrency-overload errors
-# from earlier that day, not a data/SRS problem) and are expected to
-# convert cleanly on a plain retry (`POST /normalize
-# {"prefix": "hk-2020"}`) -- not yet done as of this writing. See
-# PLAN.md's "Raw data normalization" section for exact numbers and a
-# separate, cosmetic bookkeeping bug in the failures list.
-#
-# Updated 2026-07-31 to use `assets_dir` instead of a hand-authored
-# `assets` list -- this is exactly the case that feature exists for (see
-# DatasetManifest's assets_dir doc comment in worker/src/types.ts):
-# hand-authoring/reviewing ~3,311 entries was never practical. The
-# Worker expands this into individual assets itself at ingest time, one
-# per "hk-2020/*.copc.laz" key in R2, but ONLY after
-# directoryPreflight.ts confirms every one of those files reports the
-# same CRS via `pdal info` -- if any file errors out or disagrees, the
-# whole ingest aborts and this dataset's primary provider contact (see
-# providers[] below) gets emailed instead, nothing gets ingested
-# partially. This manifest is now ready to submit
-# as-is (once the 3 remaining normalization stragglers noted above are
-# retried, or even before -- they simply won't be picked up by the
-# listing until they exist as "*.copc.laz" keys).
-#
-# Dataset provenance, verified via web search (2026-07-30), not assumed:
-# LiDAR acquired by helicopter 2019-12-20 to 2020-02-02, covering all of
-# Hong Kong's territories; published by the Civil Engineering and
-# Development Department (CEDD) of the HKSAR Government via DATA.GOV.HK
-# and the Common Spatial Data Infrastructure (CSDI) portal.
+schema_version: 2
 
-schema_version: 1
-
-dataset:
-  id: hk-2020
-  title: Hong Kong LiDAR Survey 2020
-  summary: >
-    Territory-wide airborne lidar point cloud collected by helicopter
-    over Hong Kong between December 2019 and February 2020, normalized
-    in place from raw LAS/LAZ tiles to COPC for browsing on
-    pointcloud.org.
-  description: >
-    Acquired by helicopter between 20 December 2019 and 2 February 2020,
-    covering all territories of Hong Kong. Published by the Civil
-    Engineering and Development Department (CEDD) of the Government of
-    the Hong Kong Special Administrative Region via the DATA.GOV.HK /
-    Common Spatial Data Infrastructure (CSDI) portal. Raw tiles carry a
-    native Hong Kong 1980 Grid System CRS (EPSG:2326); per PLAN.md's CRS
-    rule, that's extracted directly from each COPC via `pdal info`, not
-    declared here.
-  # Not a standard SPDX identifier -- DATA.GOV.HK's own terms, not a
-  # named open license. Summarized here; see the "license" link below
-  # for the authoritative text.
-  license: "DATA.GOV.HK Terms and Conditions of Use -- free reuse for commercial and non-commercial purposes, with attribution"
+type: Collection
+stac_version: 1.0.0
+id: hk-2020
+title: Hong Kong LiDAR Survey 2020
+description: >
+  Acquired by helicopter between 20 December 2019 and 2 February 2020,
+  covering all territories of Hong Kong. Published by the Civil
+  Engineering and Development Department (CEDD) of the Government of
+  the Hong Kong Special Administrative Region via the DATA.GOV.HK /
+  Common Spatial Data Infrastructure (CSDI) portal. Raw tiles carry a
+  native Hong Kong 1980 Grid System CRS (EPSG:2326); per PLAN.md's CRS
+  rule, that's extracted directly from each COPC via `pdal info`, not
+  declared here.
+# Not a standard SPDX identifier -- DATA.GOV.HK's own terms, not a
+# named open license. Summarized here; see the "license" link below
+# for the authoritative text.
+license: "DATA.GOV.HK Terms and Conditions of Use -- free reuse for commercial and non-commercial purposes, with attribution"
+keywords:
+- hong-kong
+- lidar
+- cedd
+- csdi
+- government-open-data
+providers:
+- name: Civil Engineering and Development Department (CEDD), HKSARG
+  roles: [producer, licensor]
+  url: https://www.ginfo.cedd.gov.hk/geoopendata/eng/LIDAR.aspx
+  pointcloud_org:
+    contact:
+      name: Howard Butler
+      email: howard@hobu.co
+- name: DATA.GOV.HK
+  roles: [host]
+  url: https://data.gov.hk/en-data/dataset/hk-cedd-csu-lidar
+links:
+- rel: license
+  href: https://data.gov.hk/en/terms-and-conditions
+- rel: about
+  href: https://www.ginfo.cedd.gov.hk/geoopendata/eng/LIDAR.aspx
+extent:
+  temporal:
+    interval:
+    - - 2019-12-20
+      - 2020-02-02
+pointcloud_org:
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
@@ -66,47 +54,17 @@ dataset:
   # Worker always fetches "s3://pointcloud/..." via its native R2
   # binding, never over HTTP, so this value has no effect on fetching.
   default_endpoint: https://c88d624d8d8f065b1afce73bd44dcf1d.r2.cloudflarestorage.com
-  providers:
-    - organization:
-        name: Civil Engineering and Development Department (CEDD), HKSARG
-      contact:
-        name: Howard Butler
-        email: howard@hobu.co
-      roles: [producer, licensor]
-      url: https://www.ginfo.cedd.gov.hk/geoopendata/eng/LIDAR.aspx
-    - organization:
-        name: DATA.GOV.HK
-      roles: [host]
-      url: https://data.gov.hk/en-data/dataset/hk-cedd-csu-lidar
-  links:
-    - rel: license
-      href: https://data.gov.hk/en/terms-and-conditions
-    - rel: about
-      href: https://www.ginfo.cedd.gov.hk/geoopendata/eng/LIDAR.aspx
-  tags:
-    - hong-kong
-    - lidar
-    - cedd
-    - csdi
-    - government-open-data
-  temporal:
-    start: 2019-12-20
-    end: 2020-02-02
-  viewer:
-    enabled: true
-    default_asset_id: 7SE11D-e838n826-e839n827
-
-# Optional dataset-wide override of the engine's default DTM/DSM/
-# ambient-occlusion generation -- see PLAN.md's "Derivative contract".
-# Every field is optional; omit any of them to fall back to whatever the
-# engine's default pipeline is for that derivative.
-derivative_processing:
+  # Optional dataset-wide override of the engine's default DTM/DSM/
+  # ambient-occlusion generation -- see PLAN.md's "Derivative contract".
+  # Every field is optional; omit any of them to fall back to whatever the
+  # engine's default pipeline is for that derivative.
+  derivative_processing:
   # GSD in meters for all derivative rasters -- overrides each asset's
   # copc.resolution (3, below) specifically for derivative output,
   # independent of the resolution used for metadata-extraction sampling.
-  resolution: 1.0
-  dtm:
-    enabled: true
+    resolution: 1.0
+    dtm:
+      enabled: true
     # hk-2020's ground classification (ASPRS class 2) was spot-checked
     # during normalization preflight. Overriding the engine's default
     # DTM pipeline here to explicitly exclude low-point noise (class 7)
@@ -120,26 +78,29 @@ derivative_processing:
     # manifest model" for the pdal_filters/pdal_filters_file tradeoff.
     # dtm-filters.json holds just the two filter stages below (no
     # reader/writer -- the engine composes those itself).
-    pdal_filters_file: dtm-filters.json
-  dsm:
-    enabled: true
+      pdal_filters_file: dtm-filters.json
+    dsm:
+      enabled: true
     # No pdal_filters override -- the engine's default first-return/
     # highest-hit surface pipeline is fine for a DSM here.
-  ambient_occlusion:
-    enabled: true
+    ambient_occlusion:
+      enabled: true
     # No whitebox_tool override -- see PLAN.md, the engine's default
     # tool choice for ambient occlusion is still undecided, so there's
     # nothing to override against yet.
+  viewer:
+    enabled: true
+    default_asset_id: 7SE11D-e838n826-e839n827
 
-# `id` for each expanded asset is the basename with `pattern`'s leading
+# `id` for each expanded item is the basename with `pattern`'s leading
 # "*" stripped -- e.g. "hk-2020/7SE11D-e838n826-e839n827.copc.laz"
 # becomes id "7SE11D-e838n826-e839n827", a Hong Kong survey grid-sheet
 # code (not a human-friendly name, unlike the single-tile examples in
-# other manifests/*.yaml files -- there's no per-file `label` override
-# available in this form, see assets_dir's doc comment in types.ts).
-assets_dir:
+# other manifests/*.yaml files -- there's no per-file `title` override
+# available in this form, see items_dir's doc comment in types.ts).
+items_dir:
   href: s3://pointcloud/hk-2020/
   pattern: "*.copc.laz"
   roles: [data]
-  copc:
-    resolution: 3
+  pointcloud_org:
+    copc_resolution: 3

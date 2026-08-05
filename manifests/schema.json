@@ -2,290 +2,303 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/hobuinc/pointcloud.org/main/manifests/schema.json",
   "title": "pointcloud.org dataset manifest",
-  "description": "Canonical schema for manifests/<id>/manifest.yaml. This is the single source of truth for the manifest format -- scripts/validate-manifests.mjs validates every manifest against this file (via ajv) in CI. pointcloud.org's ingest backend mirrors this same shape internally, EXCEPT for the handful of fields resolved away before a manifest reaches it (metadata_links[].href's relative-path form, and derivative_processing.{dtm,dsm}.pdal_filters_file) -- see this schema's own descriptions on those fields. See README.md for a walkthrough of adding a new dataset.",
+  "description": "Canonical schema for manifests/<...>/<id>/manifest.yaml -- schema_version 2, a rewrite (2026-08) that aligns the manifest's own field vocabulary directly with STAC (a Collection, plus per-item STAC-Item-shaped entries), instead of a bespoke vocabulary that merely got reflected into STAC output at ingest time. The manifest IS meant to read as a (partial) STAC Collection: only pointcloud.org-ingest-specific concerns that have no STAC equivalent (derivatives, federate, viewer settings, ...) are pulled out into the nested pointcloud_org object, so a reader who already knows STAC can read most of this file without a legend. scripts/validate-manifests.mjs validates every manifest against this file (via ajv) in CI, plus a few checks this file can't express on its own (see that script). pointcloud.org's ingest backend mirrors this same shape internally, except for the handful of fields resolved away before a manifest reaches it -- see this schema's own descriptions on those fields. See README.md for a walkthrough of adding a new dataset.",
   "type": "object",
   "required": [
     "schema_version",
-    "dataset"
+    "type",
+    "stac_version",
+    "id",
+    "title",
+    "description",
+    "license",
+    "keywords",
+    "providers",
+    "pointcloud_org"
   ],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 1,
-      "description": "Manifest schema version. Always 1 today -- bumped only if a future change is backwards-incompatible enough to need one."
+      "const": 2,
+      "description": "Manifest schema version. Bumped from 1 (2026-08) when the manifest's vocabulary was rewritten to align with STAC -- see this schema's own top-level description."
     },
-    "dataset": {
-      "$ref": "#/definitions/dataset"
+    "type": {
+      "const": "Collection",
+      "description": "Literal STAC type marker, same as a real STAC Collection document's own `type` field -- this manifest models one dataset as a Collection (its `items`/`items_dir`/`stac_item`/`external_source` entries become that Collection's child Items at ingest time)."
     },
-    "derivative_processing": {
-      "$ref": "#/definitions/derivativeProcessing",
-      "description": "Optional; only consulted when dataset.derivatives is true. Every field falls back to the engine's default when omitted."
+    "stac_version": {
+      "const": "1.0.0",
+      "description": "The STAC version this manifest's own vocabulary aligns to -- independent of whatever stac_version an externally-referenced stac_item happens to declare."
     },
-    "assets": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Dataset id -- must match this manifest's own directory name (the last path segment of manifests/.../<id>/), and must be globally unique across every manifest in this repo, regardless of how deeply nested it is. See \"Grouping datasets into directories\" in README.md."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "STAC Collection's own `description` field -- \"detailed multi-line description to fully explain the collection\" per the spec. May contain Markdown -- rendered as sanitized HTML on the site. Plain text is valid Markdown too. May also be a bare relative filename ending in \".md\" (e.g. \"description.md\") pointing at a Markdown file checked into this manifest's own directory alongside manifest.yaml -- use the file form for anything longer than a paragraph or two. The site's dataset-listing card view derives its short excerpt from this field's first line/paragraph -- there is deliberately no separate one-line \"summary\" field anymore (schema_version 1 had one; real STAC Collections don't)."
+    },
+    "license": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The same SPDX identifier / Open Data Commons name this field would otherwise be, e.g. \"CC-BY-4.0\" or \"Public Domain (U.S. Government Work)\"."
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A URL to the actual terms-of-use page for this license, when the bare id alone doesn't point anywhere specific enough -- e.g. USGS-sourced data, whose \"public domain\" status is qualified by USGS's own usage FAQ rather than a single canonical SPDX/ODC license text."
+            }
+          }
+        }
+      ],
+      "description": "STAC Collection's own `license` field is a plain SPDX/ODC string (or \"various\"/\"proprietary\") -- that plain-string form is the common case here too. The {id, url} object form is pointcloud.org's own convenience extension for a license that needs an accompanying terms-of-use link (e.g. USGS-sourced data): `id` becomes the real STAC `license` string, `url` (if given) becomes a `rel: \"license\"` Link -- the standard STAC way to attach one, so the generated Collection is still spec-plain either way."
+    },
+    "keywords": {
       "type": "array",
       "minItems": 1,
       "items": {
-        "$ref": "#/definitions/asset"
+        "type": "string"
       },
-      "description": "Hand-authored list of individual assets. Exactly one of assets/assets_dir/external_source must be given -- see this schema's root-level oneOf."
+      "description": "STAC Collection common-metadata `keywords` field (renamed from schema_version 1's `tags`)."
     },
-    "assets_dir": {
-      "$ref": "#/definitions/assetsDir",
-      "description": "Alternative to assets for a large batch of files we already hold in our own bucket (see its href pattern below -- this is only supported for our own bucket, not a foreign one). Exactly one of assets/assets_dir/external_source must be given."
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/provider"
+      },
+      "contains": {
+        "properties": {
+          "pointcloud_org": {
+            "type": "object",
+            "required": ["contact"]
+          }
+        },
+        "required": ["pointcloud_org"]
+      },
+      "description": "STAC Collection provider objects -- flat {name, description, roles, url}, not schema_version 1's nested {organization: {name}}. At least one entry must carry a pointcloud_org.contact (used for ingest-failure notification emails) -- enforced here via 'contains'."
+    },
+    "extent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temporal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["interval"],
+          "properties": {
+            "interval": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "oneOf": [{ "type": "string" }, { "type": "null" }]
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "STAC Collection's own `extent` object -- only `temporal` is manifest-authored (when the data's acquisition date/range is known); `spatial` is always computed from the ingested data itself at assembly time, never hand-authored here. `interval` follows the STAC convention exactly: an array of [start, end] pairs, either bound an ISO 8601 date/timestamp, `null` for open-ended."
+    },
+    "sci:doi": {
+      "type": "string",
+      "minLength": 1,
+      "description": "STAC Scientific Citation extension. The dataset's own DOI, bare (e.g. \"10.5066/F7J1015K\"), not a full URL."
+    },
+    "sci:citation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "STAC Scientific Citation extension. Full formatted citation text for this dataset itself (author, year, title, publisher, etc.). May contain Markdown."
+    },
+    "sci:publications": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["citation"],
+        "properties": {
+          "doi": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "description": "STAC Scientific Citation extension. Other publications that used this dataset -- distinct from sci:citation/sci:doi, which are the dataset's own citation."
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rel", "href"],
+        "properties": {
+          "rel": { "type": "string" },
+          "href": { "type": "string" },
+          "type": { "type": "string" },
+          "title": { "type": "string" }
+        }
+      },
+      "description": "STAC Link objects."
+    },
+    "assets": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["href"],
+        "properties": {
+          "href": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Same href convention as an item's asset href below -- our own bucket, a foreign s3:// bucket (falls back to default_endpoint), or a bare https:// URL."
+          },
+          "type": { "type": "string" },
+          "title": { "type": "string" },
+          "roles": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "description": "STAC Collection-level assets -- a map keyed by asset key, e.g. `thumbnail` (replaces schema_version 1's dedicated `overview_image` field with the real STAC convention for exactly this: `assets: {thumbnail: {href, type, roles: [\"thumbnail\"]}}`)."
+    },
+    "pointcloud_org": {
+      "$ref": "#/definitions/pointcloudOrg"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/item"
+      },
+      "description": "Hand-authored list of individual data items (schema_version 1's `assets`). Exactly one of items/items_dir/stac_item/external_source must be given -- see this schema's root-level oneOf."
+    },
+    "items_dir": {
+      "$ref": "#/definitions/itemsDir",
+      "description": "Alternative to items for a large batch of files we already hold in our own bucket (schema_version 1's `assets_dir`; see its href pattern below -- this is only supported for our own bucket, not a foreign one). Exactly one of items/items_dir/stac_item/external_source must be given."
+    },
+    "stac_item": {
+      "$ref": "#/definitions/stacItemRef",
+      "description": "Alternative to items/items_dir: a pointer to a contributor's own already-complete STAC Item document (geometry, bbox, pc:*/proj:* properties, assets already filled in) -- lets a contributor who already has one skip retyping that same information into items[] by hand. Ingest fetches it at ingest time and reads its assets/geometry/properties directly; our own container pipeline still processes the real asset bytes for hero-image/derivative/elevation-stats generation regardless, exactly as it would for a hand-authored items[] entry -- this only saves re-describing data that's already described somewhere real. Exactly one of items/items_dir/stac_item/external_source must be given."
     },
     "external_source": {
       "$ref": "#/definitions/externalSource",
-      "description": "Alternative to assets/assets_dir: a pointer into someone else's already-cataloged STAC document. Exactly one of assets/assets_dir/external_source must be given."
+      "description": "Alternative to items/items_dir/stac_item: a pointer into someone else's already-cataloged STAC document, when its Items/child-Collections should each become their own pointcloud.org dataset (see `expand`) rather than describing a single dataset. Exactly one of items/items_dir/stac_item/external_source must be given."
     }
   },
   "oneOf": [
     {
-      "required": [
-        "assets"
-      ],
-      "not": {
-        "anyOf": [
-          {
-            "required": [
-              "assets_dir"
-            ]
-          },
-          {
-            "required": [
-              "external_source"
-            ]
-          }
-        ]
-      }
+      "required": ["items"],
+      "not": { "anyOf": [{ "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }] }
     },
     {
-      "required": [
-        "assets_dir"
-      ],
-      "not": {
-        "anyOf": [
-          {
-            "required": [
-              "assets"
-            ]
-          },
-          {
-            "required": [
-              "external_source"
-            ]
-          }
-        ]
-      }
+      "required": ["items_dir"],
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }] }
     },
     {
-      "required": [
-        "external_source"
-      ],
-      "not": {
-        "anyOf": [
-          {
-            "required": [
-              "assets"
-            ]
-          },
-          {
-            "required": [
-              "assets_dir"
-            ]
-          }
-        ]
-      }
+      "required": ["stac_item"],
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["external_source"] }] }
+    },
+    {
+      "required": ["external_source"],
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["stac_item"] }] }
     }
   ],
   "definitions": {
-    "dataset": {
+    "provider": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "title",
-        "summary",
-        "license",
-        "derivatives",
-        "providers",
-        "tags"
-      ],
+      "required": ["name"],
       "properties": {
-        "id": {
+        "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Dataset id -- must match this manifest's directory name, manifests/<id>/."
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1
-        },
-        "summary": {
-          "type": "string",
-          "minLength": 1,
-          "description": "May contain Markdown -- rendered as sanitized HTML on the site. Plain text is valid Markdown too."
+          "description": "The organization itself, e.g. \"USGS\" or \"Civil Engineering and Development Department (CEDD), HKSARG\" -- flat, matching STAC's own provider object (schema_version 1 nested this under organization.name)."
         },
         "description": {
-          "type": "string",
-          "description": "Same Markdown-or-plain-text convention as summary, OR a bare relative filename ending in \".md\" (e.g. \"description.md\") pointing at a Markdown file checked into this manifest's own directory alongside manifest.yaml -- same relative-path convention as metadata_links[].href. Use the file form for anything longer than a paragraph or two; the site renders whichever form is given the same way."
+          "type": "string"
         },
-        "license": {
-          "oneOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["producer", "licensor", "processor", "host"]
+          },
+          "description": "STAC provider roles -- see https://github.com/radiantearth/stac-spec/blob/master/collection-spec/collection-spec.md#provider-object."
+        },
+        "url": {
+          "type": "string"
+        },
+        "pointcloud_org": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contact": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id"],
+              "required": ["name", "email"],
               "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 1,
-                  "description": "The same SPDX identifier / Open Data Commons name this field would otherwise be, e.g. \"CC-BY-4.0\" or \"Public Domain (U.S. Government Work)\"."
-                },
-                "url": {
-                  "type": "string",
-                  "minLength": 1,
-                  "description": "A URL to the actual terms-of-use page for this license, when the bare id alone doesn't point anywhere specific enough -- e.g. USGS-sourced data, whose \"public domain\" status is qualified by USGS's own usage FAQ rather than a single canonical SPDX/ODC license text."
-                }
-              }
+                "name": { "type": "string", "minLength": 1 },
+                "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" }
+              },
+              "description": "The person who can actually update this dataset's manifest/URLs on this organization's behalf, if any -- gets emailed if ingest preflight fails. No STAC equivalent, hence nested under pointcloud_org rather than a plain provider field."
             }
-          ],
-          "description": "A plain string is the common case -- an SPDX identifier (https://spdx.org/licenses/) for a standard software/creative-work license, or an Open Data Commons name (https://opendatacommons.org/licenses/) for a data-specific one, e.g. \"CC0-1.0\", \"CC-BY-4.0\", \"ODC-By-1.0\", \"ODbL-1.0\", \"ODC-PDDL-1.0\", or \"PUBLICDOMAIN\" when nothing more specific applies. Use the {id, url} object form instead when the license needs an accompanying terms-of-use link -- e.g. USGS-sourced data and its derivatives, which should use {\"id\": \"Public Domain (U.S. Government Work)\", \"url\": \"https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map\"}."
-        },
+          }
+        }
+      }
+    },
+    "pointcloudOrg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["derivatives"],
+      "properties": {
         "derivatives": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Generate DTM/DSM/ambient-occlusion COGs at ingest time? Purely a pointcloud.org processing instruction -- no STAC equivalent."
         },
-        "providers": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/definitions/provider"
-          },
-          "contains": {
-            "required": [
-              "contact"
-            ]
-          },
-          "description": "At least one entry, each an organization that produced/hosts/licenses this dataset. At least one entry must have a contact (used for ingest-failure notification emails) -- enforced here via 'contains'."
+        "federate": {
+          "type": "boolean",
+          "description": "Optional, default false. When true, ingest copies every item's bytes from wherever this manifest currently points (a foreign bucket or a bare https:// URL) into pointcloud.org's own storage once, at ingest time, then treats that copy as authoritative for all further processing instead of re-fetching from the original source. Meaningful only for a hand-authored `items` list or a `stac_item` reference (items_dir is already restricted to our own bucket; external_source points at someone else's whole STAC catalog, not individual items) -- ignored otherwise. Use this when a dataset's original host is not reliably durable (a personal server, a time-limited hosting arrangement) and the intent is to actually archive a copy here, not just link out to it."
         },
-        "links": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "rel",
-              "href"
-            ],
-            "properties": {
-              "rel": {
-                "type": "string"
-              },
-              "href": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "citations": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "text"
-            ],
-            "properties": {
-              "text": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Full formatted citation text (author, year, title, publisher, etc.). May contain Markdown."
-              },
-              "url": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Optional URL for this specific citation, e.g. a DOI landing page or a paper's page."
-              }
-            }
-          },
-          "description": "How this dataset (and/or related publications) should be cited, rendered as-is on the dataset's page. Distinct from links[] with rel: cite-as, which is a single canonical machine-readable DOI link -- citations here are human-readable attribution text, and there can be more than one (the dataset's own citation plus any papers that used it)."
-        },
-        "acknowledgement": {
+        "default_endpoint": {
           "type": "string",
-          "minLength": 1,
-          "description": "Funding/acknowledgement text a data provider asks to be included whenever the dataset is used (e.g. a granting agency and award number). Same Markdown-or-plain-text convention as summary. Rendered on the dataset's page."
+          "description": "Fallback S3 API endpoint for every item asset href in this manifest that doesn't set its own `endpoint` -- see README.md's \"Endpoints\" section."
         },
-        "tags": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          }
-        },
-        "temporal": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "start": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
-            }
-          },
-          "description": "When the data itself was acquired -- distinct from publication_date."
-        },
-        "publication_date": {
-          "type": "string",
-          "description": "ISO 8601 date or timestamp. When this dataset was published/released, as distinct from temporal (when the data was acquired)."
-        },
-        "viewer": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "default_asset_id": {
-              "type": "string"
-            }
-          }
-        },
-        "overview_image": {
-          "type": "string",
-          "description": "Same href convention as assets[].href -- our own bucket, a foreign s3:// bucket (falls back to default_endpoint), or a bare https:// URL."
-        },
-        "metadata_links": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "href"
-            ],
-            "properties": {
-              "href": {
-                "type": "string",
-                "minLength": 1,
-                "description": "An absolute https://\u00a0URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml (e.g. \"report.pdf\"). Relative paths are resolved by the site build (copied into the site's own static output), never by the ingest backend."
-              },
-              "title": {
-                "type": "string"
-              }
-            }
-          },
-          "description": "Pointers to externally-hosted or locally-checked-in metadata about this dataset (flight reports, sensor/acquisition documentation, etc.). Purely informational -- never processed by any ingest stage."
+        "derivative_processing": {
+          "$ref": "#/definitions/derivativeProcessing",
+          "description": "Optional; only consulted when pointcloud_org.derivatives is true. Every field falls back to the engine's default when omitted."
         },
         "spatial_reference": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "id"
-          ],
+          "required": ["id"],
           "properties": {
             "id": {
               "type": "string",
@@ -294,139 +307,110 @@
             },
             "vertical_id": {
               "type": "string",
-              "minLength": 1,
-              "description": "Optional separate vertical CRS identifier, e.g. \"EPSG:5703\" for NAVD88 (GEOID 09), when the source metadata documents one distinct from the horizontal id."
+              "minLength": 1
             },
             "url": {
               "type": "string",
-              "minLength": 1,
-              "description": "Link to this id's definition, e.g. \"https://spatialreference.org/ref/epsg/26912/\" -- include only when id is a well-known identifier (like an EPSG code) that actually resolves to a spatialreference.org (or similar) reference page."
+              "minLength": 1
             }
           },
-          "description": "Optional. Documents the dataset's coordinate reference system explicitly, for human readers -- purely informational, not consulted by any ingest stage (real CRS handling comes from the data itself / assets_dir's CRS-consistency preflight check)."
+          "description": "Purely informational -- doesn't feed any ingest-time CRS handling (that comes from the data itself / items_dir's CRS-consistency preflight check)."
         },
-        "federate": {
-          "type": "boolean",
-          "description": "Optional, default false. When true, ingest copies every asset's bytes from wherever this manifest currently points (a foreign bucket or a bare https:// URL) into pointcloud.org's own storage once, at ingest time, then treats that copy as authoritative for all further processing (metadata extraction, derivatives, the hero image) instead of re-fetching from the original source. Meaningful only for a hand-authored `assets` list (assets_dir is already restricted to our own bucket; external_source points at someone else's whole STAC catalog, not individual assets) -- ignored otherwise. Use this when a dataset's original host is not reliably durable (a personal server, a time-limited hosting arrangement) and the intent is to actually archive a copy here, not just link out to it."
-        },
-        "default_endpoint": {
+        "acknowledgement": {
           "type": "string",
-          "description": "Fallback S3 API endpoint for every asset href in this manifest that doesn't set its own `endpoint` -- lets a dataset declare, once, which S3-compatible service+account hosts its data: a real AWS S3 bucket in the default region needs no endpoint at all; anything else (this project's own bucket, someone else's S3-compatible bucket, or an AWS bucket outside the default region, e.g. USGS 3DEP EPT data in us-west-2) should set one, e.g. \"https://<account_id>.example-s3-service.com\" or \"https://s3.us-west-2.amazonaws.com\". For \"s3://pointcloud/...\" hrefs (this project's own bucket) it's purely informational/explicit -- those are always fetched directly by pointcloud.org's own infrastructure, never over a public HTTP endpoint, so the value has no effect on how that data is actually retrieved."
-        }
-      }
-    },
-    "provider": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "organization"
-      ],
-      "properties": {
-        "organization": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "name"
-          ],
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
+          "minLength": 1,
+          "description": "Funding/acknowledgement text a data provider asks to be included whenever the dataset is used. No STAC equivalent."
         },
-        "contact": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "name",
-            "email"
-          ],
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "email": {
-              "type": "string",
-              "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
-            }
-          },
-          "description": "The person who can actually update this dataset's manifest/URLs on this organization's behalf, if any -- gets emailed if ingest preflight fails."
+        "publication_date": {
+          "type": "string",
+          "description": "ISO 8601 date or timestamp. When this dataset was published/released, as distinct from extent.temporal (when the data was acquired). No standardized STAC Collection field for this."
         },
-        "roles": {
+        "metadata_links": {
           "type": "array",
           "items": {
-            "type": "string",
-            "enum": [
-              "producer",
-              "licensor",
-              "processor",
-              "host"
-            ]
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["href"],
+            "properties": {
+              "href": {
+                "type": "string",
+                "minLength": 1,
+                "description": "An absolute https:// URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml. Relative paths are resolved by the site build, never by the ingest backend."
+              },
+              "title": { "type": "string" }
+            }
           },
-          "description": "STAC provider roles -- see https://github.com/radiantearth/stac-spec/blob/master/collection-spec/collection-spec.md#provider-object."
+          "description": "Pointers to externally-hosted or locally-checked-in metadata about this dataset (flight reports, sensor/acquisition documentation, FGDC/ISO XML, etc.). Purely informational -- never processed by any ingest stage. Distinct from top-level `links`/STAC Link objects because of the relative-path resolution behavior above, which generic STAC links don't define."
         },
-        "url": {
-          "type": "string"
+        "viewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "default_asset_id": { "type": "string" }
+          }
         }
       }
     },
-    "asset": {
+    "item": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "href",
-        "roles",
-        "copc"
-      ],
+      "required": ["id", "assets", "pointcloud_org"],
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1
         },
-        "label": {
+        "title": {
           "type": "string"
         },
-        "href": {
-          "type": "string",
-          "minLength": 1,
-          "description": "\"s3://pointcloud/...\" (our own bucket), \"s3://<other-bucket>/...\" (foreign bucket, resolved via endpoint/default_endpoint), a bare https:// URL, or a GDAL VSI path (/vsicurl/, /vsis3/, etc.)."
-        },
-        "endpoint": {
-          "type": "string",
-          "description": "S3 API endpoint for this asset's href, e.g. \"https://<account_id>.example-s3-service.com\" (a non-AWS S3-compatible service) or \"https://s3.us-west-2.amazonaws.com\" (AWS outside the default region). Falls back to dataset.default_endpoint if omitted. Set it explicitly for any bucket that isn't a real AWS S3 bucket in the default region -- including this project's own bucket, where it's purely informational (that data is always fetched directly by pointcloud.org's own infrastructure, never over a public HTTP endpoint, so this value has no effect on retrieval, only on which service the manifest documents as the host)."
-        },
-        "roles": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          }
-        },
-        "copc": {
+        "assets": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "resolution"
-          ],
+          "required": ["data"],
           "properties": {
-            "resolution": {
-              "type": "number"
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["href", "roles"],
+              "properties": {
+                "href": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "\"s3://pointcloud/...\" (our own bucket), \"s3://<other-bucket>/...\" (foreign bucket, resolved via endpoint/default_endpoint), a bare https:// URL, or a GDAL VSI path (/vsicurl/, /vsis3/, etc.)."
+                },
+                "type": { "type": "string" },
+                "roles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string" }
+                },
+                "endpoint": {
+                  "type": "string",
+                  "description": "S3 API endpoint for this asset's href -- falls back to pointcloud_org.default_endpoint if omitted. See README.md's \"Endpoints\" section."
+                }
+              },
+              "description": "Matches the shape of a real generated STAC Item's own `assets.data` entry exactly (schema_version 1 kept href/roles/endpoint directly on the item, not nested under assets.data)."
+            }
+          }
+        },
+        "pointcloud_org": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["copc_resolution"],
+          "properties": {
+            "copc_resolution": {
+              "type": "number",
+              "description": "The finest COPC hierarchy resolution to expose for this item (schema_version 1's `copc.resolution`). An ingest-time processing hint, not an intrinsic STAC property, hence nested here."
             }
           }
         }
       }
     },
-    "assetsDir": {
+    "itemsDir": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "href",
-        "roles",
-        "copc"
-      ],
+      "required": ["href", "roles", "pointcloud_org"],
       "properties": {
         "href": {
           "type": "string",
@@ -440,34 +424,49 @@
         "roles": {
           "type": "array",
           "minItems": 1,
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         },
-        "copc": {
+        "endpoint": {
+          "type": "string"
+        },
+        "pointcloud_org": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "resolution"
-          ],
+          "required": ["copc_resolution"],
           "properties": {
-            "resolution": {
+            "copc_resolution": {
               "type": "number"
             }
           }
-        },
-        "endpoint": {
+        }
+      }
+    },
+    "stacItemRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href"],
+      "properties": {
+        "href": {
           "type": "string",
-          "description": "Same meaning as an individual asset's endpoint -- documents which S3-compatible service+account hosts this href. assets_dir is only supported for our own bucket today (href must be an s3://pointcloud/... prefix, listed directly by pointcloud.org's own infrastructure), so this is purely informational; falls back to dataset.default_endpoint if omitted."
+          "minLength": 1,
+          "description": "URL to a complete external STAC Item JSON document (geometry, bbox, assets, and ideally the pointcloud/projection extensions' pc:*/proj:* properties already populated)."
+        },
+        "pointcloud_org": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "copc_resolution": {
+              "type": "number",
+              "description": "Optional override/hint for the COPC hierarchy resolution to expose. When omitted, ingest attempts to infer a reasonable value from the referenced Item's own pc:schemas/spacing information, falling back to the engine's default."
+            }
+          }
         }
       }
     },
     "externalSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "href"
-      ],
+      "required": ["href"],
       "properties": {
         "href": {
           "type": "string",
@@ -486,27 +485,17 @@
       "properties": {
         "resolution": {
           "type": "number",
-          "description": "GSD in meters for all derivative rasters. Falls back to each asset's copc.resolution when omitted."
+          "description": "GSD in meters for all derivative rasters. Falls back to each item's pointcloud_org.copc_resolution when omitted."
         },
-        "dtm": {
-          "$ref": "#/definitions/derivativeRaster"
-        },
-        "dsm": {
-          "$ref": "#/definitions/derivativeRaster"
-        },
+        "dtm": { "$ref": "#/definitions/derivativeRaster" },
+        "dsm": { "$ref": "#/definitions/derivativeRaster" },
         "ambient_occlusion": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "whitebox_tool": {
-              "type": "string"
-            },
-            "whitebox_params": {
-              "type": "object"
-            }
+            "enabled": { "type": "boolean" },
+            "whitebox_tool": { "type": "string" },
+            "whitebox_params": { "type": "object" }
           }
         }
       }
@@ -515,46 +504,27 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
+        "enabled": { "type": "boolean" },
         "pdal_filters": {
           "type": "array",
-          "items": {
-            "$ref": "#/definitions/pdalFilterStage"
-          },
+          "items": { "$ref": "#/definitions/pdalFilterStage" },
           "description": "Inline filter stages. Mutually exclusive with pdal_filters_file. Replaces the engine's default pipeline entirely when given -- no 'append to defaults' mode."
         },
         "pdal_filters_file": {
           "type": "string",
           "minLength": 1,
-          "description": "Path, relative to this manifest's own directory, to a JSON file containing just the filter-stages array (same shape as pdal_filters, no reader/writer -- the engine picks the reader from the source file type and appends its own writers.gdal stage). Mutually exclusive with pdal_filters. Resolved (read + parsed + inlined as pdal_filters) by build-datasets-payload.mjs before the manifest ever reaches the ingest backend."
+          "description": "Path, relative to this manifest's own directory, to a JSON file containing just the filter-stages array. Mutually exclusive with pdal_filters. Resolved (read + parsed + inlined as pdal_filters) by build-datasets-payload.mjs before the manifest ever reaches the ingest backend."
         }
       },
       "not": {
-        "allOf": [
-          {
-            "required": [
-              "pdal_filters"
-            ]
-          },
-          {
-            "required": [
-              "pdal_filters_file"
-            ]
-          }
-        ]
+        "allOf": [{ "required": ["pdal_filters"] }, { "required": ["pdal_filters_file"] }]
       }
     },
     "pdalFilterStage": {
       "type": "object",
-      "required": [
-        "type"
-      ],
+      "required": ["type"],
       "properties": {
-        "type": {
-          "type": "string"
-        }
+        "type": { "type": "string" }
       },
       "description": "{\"type\": \"filters.range\", ...} etc, as PDAL itself expects. Not validated further -- passed through to the Container verbatim."
     }

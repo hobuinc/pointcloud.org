@@ -11,10 +11,13 @@
 // manifests/README.md's security-boundary note).
 //
 // Checks, per changed dataset:
-//   1. Every foreign (non-"s3://pointcloud/...") asset href, and
-//      overview_image if set, that resolves to a plain https:// URL is
-//      actually reachable (a HEAD request, falling back to a
-//      Range-limited GET for servers that reject HEAD).
+//   1. Every foreign (non-"s3://pointcloud/...") item asset href (from
+//      items[]), the collection-level assets.thumbnail href if set, and
+//      the stac_item/external_source href if either is used, that
+//      resolves to a plain https:// URL is actually reachable (a HEAD
+//      request, falling back to a Range-limited GET for servers that
+//      reject HEAD). items_dir is never checked here -- it's always our
+//      own bucket by schema.
 //   2. The dataset's resolved JSON payload size, purely informational
 //      (no hard limit enforced here, but a contributor opening a PR
 //      still benefits from seeing it).
@@ -82,19 +85,32 @@ async function main() {
     const raw = readFileSync(file, "utf-8");
     const manifest = loadYaml(raw);
     const manifestDir = path.dirname(file);
-    const datasetId = manifest?.dataset?.id ?? path.basename(manifestDir);
-    const defaultEndpoint = manifest?.dataset?.default_endpoint;
+    const datasetId = manifest?.id ?? path.basename(manifestDir);
+    const defaultEndpoint = manifest?.pointcloud_org?.default_endpoint;
 
     console.log(`[reachability] ${datasetId}:`);
 
     const urlsToCheck = [];
-    for (const asset of manifest?.assets ?? []) {
-      const url = resolveCheckableUrl(asset.href, asset.endpoint ?? defaultEndpoint);
-      if (url) urlsToCheck.push({ label: asset.id ?? asset.href, url });
+    for (const item of manifest?.items ?? []) {
+      const data = item?.assets?.data;
+      if (!data?.href) continue;
+      const url = resolveCheckableUrl(data.href, data.endpoint ?? defaultEndpoint);
+      if (url) urlsToCheck.push({ label: item.id ?? data.href, url });
     }
-    if (manifest?.dataset?.overview_image) {
-      const url = resolveCheckableUrl(manifest.dataset.overview_image, defaultEndpoint);
-      if (url) urlsToCheck.push({ label: "overview_image", url });
+    if (manifest?.assets?.thumbnail?.href) {
+      const url = resolveCheckableUrl(manifest.assets.thumbnail.href, defaultEndpoint);
+      if (url) urlsToCheck.push({ label: "assets.thumbnail", url });
+    }
+    // stac_item/external_source both point at a URL to someone else's
+    // JSON document, not our own bucket -- a bare https:// href, so
+    // resolveCheckableUrl's plain-URL branch handles it directly.
+    if (manifest?.stac_item?.href) {
+      const url = resolveCheckableUrl(manifest.stac_item.href, defaultEndpoint);
+      if (url) urlsToCheck.push({ label: "stac_item", url });
+    }
+    if (manifest?.external_source?.href) {
+      const url = resolveCheckableUrl(manifest.external_source.href, defaultEndpoint);
+      if (url) urlsToCheck.push({ label: "external_source", url });
     }
 
     if (urlsToCheck.length === 0) {
@@ -113,11 +129,14 @@ async function main() {
     // Informational payload-size estimate -- same resolution
     // build-datasets-payload.mjs does, just measured rather than
     // dispatched anywhere.
-    if (manifest?.derivative_processing) {
-      manifest.derivative_processing = {
-        ...manifest.derivative_processing,
-        dtm: resolveFilterStages(manifestDir, manifest.derivative_processing.dtm),
-        dsm: resolveFilterStages(manifestDir, manifest.derivative_processing.dsm),
+    if (manifest?.pointcloud_org?.derivative_processing) {
+      manifest.pointcloud_org = {
+        ...manifest.pointcloud_org,
+        derivative_processing: {
+          ...manifest.pointcloud_org.derivative_processing,
+          dtm: resolveFilterStages(manifestDir, manifest.pointcloud_org.derivative_processing.dtm),
+          dsm: resolveFilterStages(manifestDir, manifest.pointcloud_org.derivative_processing.dsm),
+        },
       };
     }
     const sizeBytes = Buffer.byteLength(JSON.stringify({ datasetId, manifest }));

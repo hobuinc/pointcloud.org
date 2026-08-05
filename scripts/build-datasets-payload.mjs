@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Parses one or more manifests/<id>/manifest.yaml files and prints a
-// JSON payload of the shape { datasets: [{ datasetId, manifest }, ...] }
-// to stdout -- this is the client_payload body for the
-// repository_dispatch this repo's .github/workflows/manifest-ingest.yml
-// fires at pointcloud.org's private infrastructure once a manifest PR
-// merges.
+// Parses one or more manifests/.../<id>/manifest.yaml files and prints a
+// JSON payload of the shape
+// { datasets: [{ datasetId, group, manifest }, ...] } to stdout -- this
+// is the client_payload body for the repository_dispatch this repo's
+// .github/workflows/manifest-ingest.yml fires at pointcloud.org's
+// private infrastructure once a manifest PR merges.
 //
 // This repo intentionally never talks to pointcloud.org's ingest
 // backend directly (no ingest credentials of any kind live here) --
@@ -12,23 +12,40 @@
 // its own ingest endpoint using its own credentials.
 //
 // This is also the ONLY place a manifest's relative file references
-// (derivative_processing.{dtm,dsm}.pdal_filters_file,
-// dataset.description's bare-".md"-filename form) get resolved: this
-// script has a real git checkout to read them from, but the ingest
-// backend never does -- by the time a manifest reaches it, every such
-// reference has already been read and inlined into the plain field the
-// ingest backend actually expects (dataset.description ends up as
-// ordinary Markdown text either way, so the STAC Collection this
-// produces carries real content, not a meaningless bare filename).
-// `metadata_links[].href`'s relative-path form is deliberately NOT
-// resolved here -- it's a site-display-only field the ingest backend
-// never reads at all, resolved instead by the site's own build.
+// (pointcloud_org.derivative_processing.{dtm,dsm}.pdal_filters_file,
+// description's bare-".md"-filename form) get resolved: this script has
+// a real git checkout to read them from, but the ingest backend never
+// does -- by the time a manifest reaches it, every such reference has
+// already been read and inlined into the plain field the ingest backend
+// actually expects (description ends up as ordinary Markdown text
+// either way, so the STAC Collection this produces carries real
+// content, not a meaningless bare filename).
+// `pointcloud_org.metadata_links[].href`'s relative-path form is
+// deliberately NOT resolved here -- it's a site-display-only field the
+// ingest backend never reads at all, resolved instead by the site's own
+// build.
+//
+// `group` (schema_version 2, 2026-08) is derived here from this
+// manifest's own directory nesting under manifests/ -- e.g.
+// "manifests/usgs-3dep/boston-lot/manifest.yaml" gets group
+// "usgs-3dep", while "manifests/autzen/manifest.yaml" (directly under
+// manifests/) gets group null. Purely an organizational grouping for
+// related datasets (see README.md's "Grouping datasets into
+// directories") -- `datasetId` itself is always just the leaf directory
+// name regardless of nesting depth, matching every downstream consumer
+// (R2 key prefixes, site routes, the STAC catalog, stac-api collection
+// ids) that already treats it as a flat, globally-unique string.
 //
 // Usage: node scripts/build-datasets-payload.mjs <manifest.yaml> [...] > payload.json
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { load as loadYaml } from "js-yaml";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.join(__dirname, "..");
+const MANIFESTS_DIR = path.join(REPO_ROOT, "manifests");
 
 const files = process.argv.slice(2);
 if (files.length === 0) {
@@ -56,7 +73,7 @@ function resolveFilterStages(manifestDir, config) {
 
 /**
  * If `description` is a bare relative filename ending in ".md" (see
- * schema.json's description of dataset.description, and
+ * schema.json's description of this field, and
  * validate-manifests.mjs's matching check), reads that file's content
  * from `manifestDir` and returns it in its place. Otherwise returns
  * `description` unchanged (inline text, or absent). Same
@@ -69,28 +86,37 @@ function resolveDescription(manifestDir, description) {
   return readFileSync(path.join(manifestDir, description), "utf-8");
 }
 
+/**
+ * "manifests/usgs-3dep/boston-lot" -> "usgs-3dep"; "manifests/autzen" ->
+ * null. See this module's doc comment.
+ */
+function groupFromManifestDir(manifestDir) {
+  const rel = path.relative(MANIFESTS_DIR, manifestDir);
+  const segments = rel.split(path.sep);
+  return segments.length > 1 ? segments.slice(0, -1).join("/") : null;
+}
+
 const datasets = files.map((file) => {
   const raw = readFileSync(file, "utf-8");
   const manifest = loadYaml(raw);
   const manifestDir = path.dirname(file);
 
-  if (manifest?.derivative_processing) {
-    manifest.derivative_processing = {
-      ...manifest.derivative_processing,
-      dtm: resolveFilterStages(manifestDir, manifest.derivative_processing.dtm),
-      dsm: resolveFilterStages(manifestDir, manifest.derivative_processing.dsm),
+  if (manifest?.pointcloud_org?.derivative_processing) {
+    manifest.pointcloud_org = {
+      ...manifest.pointcloud_org,
+      derivative_processing: {
+        ...manifest.pointcloud_org.derivative_processing,
+        dtm: resolveFilterStages(manifestDir, manifest.pointcloud_org.derivative_processing.dtm),
+        dsm: resolveFilterStages(manifestDir, manifest.pointcloud_org.derivative_processing.dsm),
+      },
     };
   }
 
-  if (manifest?.dataset) {
-    manifest.dataset = {
-      ...manifest.dataset,
-      description: resolveDescription(manifestDir, manifest.dataset.description),
-    };
-  }
+  manifest.description = resolveDescription(manifestDir, manifest.description);
 
-  const datasetId = manifest?.dataset?.id ?? path.basename(manifestDir);
-  return { datasetId, manifest };
+  const datasetId = manifest?.id ?? path.basename(manifestDir);
+  const group = groupFromManifestDir(manifestDir);
+  return { datasetId, group, manifest };
 });
 
 process.stdout.write(JSON.stringify({ datasets }));

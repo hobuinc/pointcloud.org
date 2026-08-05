@@ -1,12 +1,23 @@
-schema_version: 1
+schema_version: 2
 
 # Filename attributes this to Bohannan Huston, an Albuquerque-based surveying/engineering firm.
 # TODO: confirm license before publishing -- not yet verified for this dataset.
-dataset:
-  id: hobbs-nm
-  title: "Hobbs, New Mexico"
-  summary: "TODO: write a one-line summary for Hobbs, New Mexico"
-  license: UNKNOWN
+type: Collection
+stac_version: 1.0.0
+id: hobbs-nm
+title: "Hobbs, New Mexico"
+description: "TODO: write a one-line summary for Hobbs, New Mexico"
+license: UNKNOWN
+keywords: [new-mexico]
+providers:
+- name: Bohannan Huston
+  roles: [producer]
+  url: https://www.bhinc.com/
+  pointcloud_org:
+    contact:
+      name: Howard Butler
+      email: howard@hobu.co
+pointcloud_org:
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
@@ -16,22 +27,15 @@ dataset:
   # Worker always fetches "s3://pointcloud/..." via its native R2
   # binding, never over HTTP, so this value has no effect on fetching.
   default_endpoint: https://c88d624d8d8f065b1afce73bd44dcf1d.r2.cloudflarestorage.com
-  providers:
-    - organization:
-        name: Bohannan Huston
-      contact:
-        name: Howard Butler
-        email: howard@hobu.co
-      roles: [producer]
-      url: https://www.bhinc.com/
-  tags: [new-mexico]
   viewer:
     enabled: true
     default_asset_id: hobbs-nm-bohannan-huston
 
-assets:
-  - id: hobbs-nm-bohannan-huston
-    href: s3://pointcloud/hobbs/hobbs-nm-bohannan-huston.copc.laz
-    roles: [data]
-    copc:
-      resolution: 1  # TODO: confirm intended resolution
+items:
+- id: hobbs-nm-bohannan-huston
+  assets:
+    data:
+      href: s3://pointcloud/hobbs/hobbs-nm-bohannan-huston.copc.laz
+      roles: [data]
+  pointcloud_org:
+    copc_resolution: 1

@@ -71,12 +71,24 @@ jobs:
               per_page: 100,
             });
             // Require at least 3 path segments (manifests/<dir>/<file>)
-            // before treating segment 2 as a dataset directory name --
-            // otherwise a top-level file directly under manifests/ (e.g.
-            // manifests/schema.json, which has only 2 segments) gets
-            // mistaken for a directory. Learned from a real failure:
-            // PR #5 touched schema.json alongside dataset directories
-            // and broke exactly this way.
+            // before treating "everything between manifests/ and the
+            // filename" as a dataset directory -- otherwise a top-level
+            // file directly under manifests/ (e.g. manifests/schema.json,
+            // which has only 2 segments) gets mistaken for a directory.
+            // Learned from a real failure: PR #5 touched schema.json
+            // alongside dataset directories and broke exactly this way.
+            //
+            // "Dataset directory" here is deliberately just "the
+            // filename's own dirname" at ANY depth (2026-08, schema_version
+            // 2's grouping-directory support -- e.g.
+            // "manifests/usgs-3dep/boston-lot/manifest.yaml" resolves to
+            // "usgs-3dep/boston-lot"), not a hardcoded single segment.
+            // This assumes contributors only ever put files inside a real
+            // LEAF dataset directory, never directly inside a bare
+            // grouping directory (manifests/usgs-3dep/ itself never holds
+            // its own manifest.yaml or companion files) -- documented in
+            // README.md's "Grouping datasets into directories".
+            const datasetDirOf = (filename) => filename.split("/").slice(1, -1).join("/");
             const datasetDirFiles = files.filter(
               (f) => f.filename.startsWith("manifests/") && f.filename.split("/").length > 2,
             );
@@ -87,7 +99,7 @@ jobs:
             // re-check/re-trigger for that dataset too.
             const datasetIds = [
               ...new Set(
-                datasetDirFiles.filter((f) => f.status !== "removed").map((f) => f.filename.split("/")[1]),
+                datasetDirFiles.filter((f) => f.status !== "removed").map((f) => datasetDirOf(f.filename)),
               ),
             ];
             // A dataset directory counts as "removed" only if EVERY file
@@ -98,7 +110,7 @@ jobs:
             // removal, and datasetIds already covers that case.
             const removedDatasetIds = [
               ...new Set(
-                datasetDirFiles.filter((f) => f.status === "removed").map((f) => f.filename.split("/")[1]),
+                datasetDirFiles.filter((f) => f.status === "removed").map((f) => datasetDirOf(f.filename)),
               ),
             ].filter((id) => !datasetIds.includes(id));
 
@@ -420,12 +432,22 @@ jobs:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
           script: |
             const removedIds = ${{ needs.changed.outputs.removed_dataset_ids }};
+            // removedIds[0] is a manifest *directory path* relative to
+            // manifests/ (e.g. "usgs-3dep/boston-lot" for a grouped
+            // dataset) -- but unlike dispatch-ingest/dispatch-preflight
+            // above, there's no manifest.yaml left to read at this point
+            // (the PR deleted it), so the infra side has nothing to
+            // derive a real dataset id from the way
+            // build-datasets-payload.mjs normally would. Take just the
+            // leaf segment here instead -- the flat, globally-unique id
+            // every R2 key/site route/STAC entry is actually keyed by.
+            const datasetId = removedIds[0].split("/").pop();
             await github.rest.repos.createDispatchEvent({
               owner: "hobuinc",
               repo: "pointcloud.org-infrastructure",
               event_type: "manifest-removal",
               client_payload: {
-                datasetId: removedIds[0],
+                datasetId,
                 sha: "${{ github.event.pull_request.merge_commit_sha }}",
                 prNumber: ${{ github.event.pull_request.number }},
               },
