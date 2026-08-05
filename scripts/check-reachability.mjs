@@ -13,11 +13,11 @@
 // Checks, per changed dataset:
 //   1. Every foreign (non-"s3://pointcloud/...") item asset href (from
 //      items[]), the collection-level assets.thumbnail href if set, and
-//      the stac_item/external_source href if either is used, that
-//      resolves to a plain https:// URL is actually reachable (a HEAD
-//      request, falling back to a Range-limited GET for servers that
-//      reject HEAD). items_dir is never checked here -- it's always our
-//      own bucket by schema.
+//      the stac_item/external_source/ept_source href if any is used,
+//      that resolves to a plain https:// URL is actually reachable (a
+//      HEAD request, falling back to a Range-limited GET for servers
+//      that reject HEAD). items_dir is never checked here -- it's
+//      always our own bucket by schema.
 //   2. The dataset's resolved JSON payload size, purely informational
 //      (no hard limit enforced here, but a contributor opening a PR
 //      still benefits from seeing it).
@@ -111,6 +111,10 @@ async function main() {
     if (manifest?.external_source?.href) {
       const url = resolveCheckableUrl(manifest.external_source.href, defaultEndpoint);
       if (url) urlsToCheck.push({ label: "external_source", url });
+    }
+    if (manifest?.ept_source?.href) {
+      const url = resolveCheckableUrl(manifest.ept_source.href, defaultEndpoint);
+      if (url) urlsToCheck.push({ label: "ept_source", url });
     }
 
     if (urlsToCheck.length === 0) {
