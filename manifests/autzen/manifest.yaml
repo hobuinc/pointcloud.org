@@ -9,7 +9,8 @@ description: >
   lidar survey of Autzen Stadium and the surrounding University of
   Oregon campus area in Eugene, Oregon, collected by Watershed
   Sciences, Inc. in 2010. In 2021, Max Sampson of Hobu, Inc. manually
-  classified 21 object categories on the original point cloud. See
+  classified 21 object categories on the original point cloud -- this
+  is that classified version, hosted directly by pointcloud.org. See
   https://github.com/PDAL/data/tree/main/autzen for the source
   repository this dataset is drawn from, including the original,
   unclassified point cloud and full acquisition details.
@@ -38,16 +39,22 @@ pointcloud_org:
   derivatives: true
   viewer:
     enabled: true
+    default_asset_id: autzen-classified
 
-# PDAL/data already publishes a fully-populated STAC Item for this exact
-# asset (geometry/bbox, pc:count, proj:projjson, etc. -- see
-# https://github.com/PDAL/data/blob/main/stac/autzen_copc.json) --
-# referencing it directly means we don't retype information someone
-# else already described. `pointcloud_org.copc_resolution` isn't
-# derivable from the referenced Item itself, so it's set explicitly here
-# based on this asset's real point count (~10.65M points) and prior use
-# on pointcloud.org.
-stac_item:
-  href: https://raw.githubusercontent.com/PDAL/data/main/stac/autzen_copc.json
+# pointcloud.org already hosts its own copy of this classified survey
+# (see the description above) -- PDAL/data does publish a fully-formed
+# STAC Item for the same file (stac/autzen_copc.json), but its `data`
+# asset resolves to GitHub's media.githubusercontent.com LFS host
+# rather than this bucket. Since we're the ones already hosting it,
+# describing it directly with a plain `items` entry is the right form
+# here, not `stac_item` (that form exists for datasets we *don't* host
+# ourselves, see autzen-2023's `federate: true` for the "we want our
+# own copy but the contributor's is the source of truth" case).
+items:
+- id: autzen-classified
+  assets:
+    data:
+      href: s3://pointcloud/autzen/autzen-classified.copc.laz
+      roles: [data]
   pointcloud_org:
     copc_resolution: 1
