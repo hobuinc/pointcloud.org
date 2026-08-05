@@ -1,0 +1,79 @@
+schema_version: 2
+
+type: Collection
+stac_version: "1.0.0"
+id: autzen-2023
+title: Autzen Stadium — Willamette Valley 2023 Lidar
+description: >
+  A clip covering the Autzen Stadium / University of Oregon campus area
+  (Eugene, Oregon) extracted from the OLC Willamette Valley 2023 Lidar
+  project -- a 426,859-acre lidar acquisition across Benton, Lane, Linn,
+  Marion, and Polk Counties, Oregon, commissioned by the Oregon
+  Department of Geology and Mineral Industries (DOGAMI) through the
+  Oregon Lidar Consortium (OLC) and collected/processed by NV5
+  Geospatial at a nominal pulse spacing of 0.22m, meeting USGS National
+  Geospatial Program Lidar Base Specification 2020 Revision A. See
+  https://github.com/PDAL/data/tree/main/autzen/2023 for the source
+  files this clip is drawn from (two native tiles, reprojected and
+  merged into a single COPC file), including the full lidar report and
+  FGDC/ISO metadata. This is a newer, separate acquisition from the
+  `autzen` dataset's original 2010 survey -- not an update to it.
+license: CC-BY-4.0
+keywords: [oregon, willamette-valley, dogami, olc, pdal]
+providers:
+  - name: Oregon Department of Geology and Mineral Industries (DOGAMI)
+    roles: [licensor]
+    url: https://www.oregongeology.org/lidar/
+  - name: NV5 Geospatial
+    roles: [producer]
+  - name: PDAL
+    roles: [host]
+    url: https://github.com/PDAL/data
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+links:
+  - rel: about
+    href: https://github.com/PDAL/data/tree/main/autzen/2023
+  - rel: license
+    href: https://github.com/PDAL/data/blob/main/LICENSE
+extent:
+  temporal:
+    interval:
+      - ["2023-07-21", "2023-07-22"]
+
+pointcloud_org:
+  derivatives: true
+  publication_date: 2023-11-24
+  spatial_reference:
+    id: "EPSG:2991"
+    vertical_id: "EPSG:6360"
+    url: https://spatialreference.org/ref/epsg/2991/
+  metadata_links:
+    - title: OLC Willamette Valley 2023 NIR Lidar Report
+      href: https://raw.githubusercontent.com/PDAL/data/main/autzen/2023/OLC_WillametteValley_2023_NIR_Lidar_Report.pdf
+    - title: FGDC/ISO metadata (Classified LAS)
+      href: https://raw.githubusercontent.com/PDAL/data/main/autzen/2023/OLC_Willamette_Valley_Classified_LAS_Metadata.xml
+  viewer:
+    enabled: true
+  # Copies this asset's bytes into pointcloud.org's own storage at
+  # ingest time rather than continuing to stream it from GitHub's LFS
+  # media host on every later access -- per explicit request, since this
+  # is the archival copy pointcloud.org intends to keep long-term.
+  federate: true
+
+items:
+  - id: autzen-2023
+    assets:
+      data:
+        # LFS-tracked in the PDAL/data repo -- this exact URL form (not
+        # raw.githubusercontent.com, which serves only a small LFS
+        # pointer file for LFS-tracked content) redirects through
+        # GitHub to the real, LFS-resolved 184.5MB file at
+        # media.githubusercontent.com.
+        href: https://github.com/PDAL/data/raw/refs/heads/main/autzen/2023/autzen-2023.copc.laz
+        roles: [data]
+    pointcloud_org:
+      # Matches the survey's own nominal pulse spacing (0.22m).
+      copc_resolution: 0.22
