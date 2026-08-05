@@ -1,39 +1,53 @@
 schema_version: 2
 
-# Well-known PDAL/point-cloud community sample dataset (Autzen Stadium, Eugene, Oregon). Original collection provider not confirmed here.
-# TODO: confirm license before publishing -- not yet verified for this dataset.
 type: Collection
-stac_version: 1.0.0
+stac_version: "1.0.0"
 id: autzen
 title: Autzen Stadium
-description: "TODO: write a one-line summary for Autzen Stadium"
-license: UNKNOWN
-keywords: [oregon, sample-data]
+description: >
+  A well-known PDAL/point-cloud community sample dataset: an airborne
+  lidar survey of Autzen Stadium and the surrounding University of
+  Oregon campus area in Eugene, Oregon, collected by Watershed
+  Sciences, Inc. in 2010. In 2021, Max Sampson of Hobu, Inc. manually
+  classified 21 object categories on the original point cloud. See
+  https://github.com/PDAL/data/tree/main/autzen for the source
+  repository this dataset is drawn from, including the original,
+  unclassified point cloud and full acquisition details.
+license: CC-BY-4.0
+keywords: [oregon, sample-data, pdal, university-of-oregon]
 providers:
-- name: "TODO: confirm organization name"
-  pointcloud_org:
-    contact:
-      name: Howard Butler
-      email: howard@hobu.co
+  - name: Watershed Sciences, Inc.
+    roles: [producer]
+  - name: Hobu, Inc.
+    roles: [processor]
+    url: https://hobu.co
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+  - name: PDAL
+    roles: [host]
+    url: https://github.com/PDAL/data
+links:
+  - rel: about
+    href: https://github.com/PDAL/data/tree/main/autzen
+  - rel: license
+    href: https://github.com/PDAL/data/blob/main/LICENSE
+
 pointcloud_org:
   derivatives: true
-  # Every asset below lives in our own Cloudflare R2 bucket, but this
-  # is declared explicitly (rather than inferred from the "pointcloud"
-  # bucket name) so every dataset uniformly states which S3-compatible
-  # service+account hosts it -- AWS S3, this Cloudflare R2 account, or
-  # someone else's bucket. Purely informational for this bucket: the
-  # Worker always fetches "s3://pointcloud/..." via its native R2
-  # binding, never over HTTP, so this value has no effect on fetching.
-  default_endpoint: https://c88d624d8d8f065b1afce73bd44dcf1d.r2.cloudflarestorage.com
   viewer:
     enabled: true
-    default_asset_id: autzen-classified
 
-items:
-- id: autzen-classified
-  assets:
-    data:
-      href: s3://pointcloud/autzen/autzen-classified.copc.laz
-      roles: [data]
+# PDAL/data already publishes a fully-populated STAC Item for this exact
+# asset (geometry/bbox, pc:count, proj:projjson, etc. -- see
+# https://github.com/PDAL/data/blob/main/stac/autzen_copc.json) --
+# referencing it directly means we don't retype information someone
+# else already described. `pointcloud_org.copc_resolution` isn't
+# derivable from the referenced Item itself, so it's set explicitly here
+# based on this asset's real point count (~10.65M points) and prior use
+# on pointcloud.org.
+stac_item:
+  href: https://raw.githubusercontent.com/PDAL/data/main/stac/autzen_copc.json
   pointcloud_org:
     copc_resolution: 1
