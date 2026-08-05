@@ -96,7 +96,7 @@ function describeManifest(manifest) {
   const keywordCount = Array.isArray(manifest?.keywords) ? manifest.keywords.length : 0;
   const metadataLinkCount = Array.isArray(pco.metadata_links) ? pco.metadata_links.length : 0;
 
-  let kind = "(none of items/items_dir/stac_item/external_source)";
+  let kind = "(none of items/items_dir/stac_item/external_source/ept_source)";
   if (Array.isArray(manifest?.items)) {
     kind = `items (${manifest.items.length} hand-authored entr${manifest.items.length === 1 ? "y" : "ies"})`;
   } else if (manifest?.items_dir) {
@@ -105,6 +105,8 @@ function describeManifest(manifest) {
     kind = `stac_item (references ${manifest.stac_item.href})`;
   } else if (manifest?.external_source) {
     kind = `external_source (dry-run only today; expand=${Boolean(manifest.external_source.expand)})`;
+  } else if (manifest?.ept_source) {
+    kind = `ept_source (references ${manifest.ept_source.href})`;
   }
 
   const derivativeBits = [];

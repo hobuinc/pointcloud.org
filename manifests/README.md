@@ -9,7 +9,7 @@ in CI), and so will yours.
 As of schema_version 2 (2026-08), a manifest's own field vocabulary is
 aligned directly with [STAC](https://stacspec.org/) -- a manifest reads
 as a (partial) STAC Collection, whose `items`/`items_dir`/`stac_item`/
-`external_source` become its child Items at ingest time. Only
+`external_source`/`ept_source` become its child Items at ingest time. Only
 pointcloud.org-ingest-specific concerns with no STAC equivalent
 (derivatives, federate, viewer settings, ...) live under the nested
 `pointcloud_org` object -- everything else is a real, if partial, STAC
@@ -213,14 +213,33 @@ Exactly one of these four:
       copc_resolution: 1   # optional override; falls back to a conservative default
   ```
 - **`external_source`** -- a pointer into someone else's already-published
-  STAC catalog (e.g. a USGS 3DEP EPT collection) rather than data we host
-  ourselves. As of this writing this only produces a dry-run preview
-  report, not a real ingest -- see `schema.json`'s description of this
-  field.
+  STAC Catalog/ItemCollection rather than data we host ourselves, when
+  that document's own child Items/Collections should each become their
+  own separate pointcloud.org dataset (`expand: true`). As of this
+  writing this only produces a dry-run preview report, not a real
+  ingest -- see `schema.json`'s description of this field. For a single
+  EPT resource (one dataset, not an expand-style catalog of many), use
+  `ept_source` below instead.
   ```yaml
   external_source:
     href: https://example.org/some/item_collection.json
     expand: true
+  ```
+- **`ept_source`** -- a single [Entwine Point Tile](https://entwine.io/entwine-point-tile.html)
+  (EPT) resource -- e.g. one project out of USGS 3DEP's EPT catalog --
+  read directly via PDAL's `readers.ept` and displayed in-browser via
+  Eptium's native EPT support. Never copied into our own bucket (no
+  `federate` support) and never converted to COPC, since an EPT
+  resource is a multi-file hierarchy (`ept.json` + `ept-data/` +
+  `ept-hierarchy/`), not one downloadable file. `href` must end in
+  `ept.json` -- that's the exact suffix both PDAL's and Eptium's own
+  auto-detection key off of.
+  ```yaml
+  ept_source:
+    href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/my-project/ept.json
+    ept_catalog_id: USGS_LPC_My_Project_2021  # optional, purely informational
+    pointcloud_org:
+      copc_resolution: 1   # optional override; falls back to a conservative default
   ```
 
 An individual item's `assets.data.href` can be:

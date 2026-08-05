@@ -198,37 +198,45 @@
       "items": {
         "$ref": "#/definitions/item"
       },
-      "description": "Hand-authored list of individual data items (schema_version 1's `assets`). Exactly one of items/items_dir/stac_item/external_source must be given -- see this schema's root-level oneOf."
+      "description": "Hand-authored list of individual data items (schema_version 1's `assets`). Exactly one of items/items_dir/stac_item/external_source/ept_source must be given -- see this schema's root-level oneOf."
     },
     "items_dir": {
       "$ref": "#/definitions/itemsDir",
-      "description": "Alternative to items for a large batch of files we already hold in our own bucket (schema_version 1's `assets_dir`; see its href pattern below -- this is only supported for our own bucket, not a foreign one). Exactly one of items/items_dir/stac_item/external_source must be given."
+      "description": "Alternative to items for a large batch of files we already hold in our own bucket (schema_version 1's `assets_dir`; see its href pattern below -- this is only supported for our own bucket, not a foreign one). Exactly one of items/items_dir/stac_item/external_source/ept_source must be given."
     },
     "stac_item": {
       "$ref": "#/definitions/stacItemRef",
-      "description": "Alternative to items/items_dir: a pointer to a contributor's own already-complete STAC Item document (geometry, bbox, pc:*/proj:* properties, assets already filled in) -- lets a contributor who already has one skip retyping that same information into items[] by hand. Ingest fetches it at ingest time and reads its assets/geometry/properties directly; our own container pipeline still processes the real asset bytes for hero-image/derivative/elevation-stats generation regardless, exactly as it would for a hand-authored items[] entry -- this only saves re-describing data that's already described somewhere real. Exactly one of items/items_dir/stac_item/external_source must be given."
+      "description": "Alternative to items/items_dir: a pointer to a contributor's own already-complete STAC Item document (geometry, bbox, pc:*/proj:* properties, assets already filled in) -- lets a contributor who already has one skip retyping that same information into items[] by hand. Ingest fetches it at ingest time and reads its assets/geometry/properties directly; our own container pipeline still processes the real asset bytes for hero-image/derivative/elevation-stats generation regardless, exactly as it would for a hand-authored items[] entry -- this only saves re-describing data that's already described somewhere real. Exactly one of items/items_dir/stac_item/external_source/ept_source must be given."
     },
     "external_source": {
       "$ref": "#/definitions/externalSource",
-      "description": "Alternative to items/items_dir/stac_item: a pointer into someone else's already-cataloged STAC document, when its Items/child-Collections should each become their own pointcloud.org dataset (see `expand`) rather than describing a single dataset. Exactly one of items/items_dir/stac_item/external_source must be given."
+      "description": "Alternative to items/items_dir/stac_item/ept_source: a pointer into someone else's already-cataloged STAC document, when its Items/child-Collections should each become their own pointcloud.org dataset (see `expand`) rather than describing a single dataset. Exactly one of items/items_dir/stac_item/external_source/ept_source must be given."
+    },
+    "ept_source": {
+      "$ref": "#/definitions/eptSourceRef",
+      "description": "Alternative to items/items_dir/stac_item/external_source: a single Entwine Point Tile (EPT) resource, read directly via PDAL's readers.ept and displayed in-browser via Eptium's native EPT support -- never copied into our own bucket (no `federate` support) and never converted to COPC, since it's a multi-file hierarchy (ept.json + ept-data/ + ept-hierarchy/) rather than one downloadable file. Exactly one of items/items_dir/stac_item/external_source/ept_source must be given."
     }
   },
   "oneOf": [
     {
       "required": ["items"],
-      "not": { "anyOf": [{ "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }] }
+      "not": { "anyOf": [{ "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }, { "required": ["ept_source"] }] }
     },
     {
       "required": ["items_dir"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }] }
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }, { "required": ["ept_source"] }] }
     },
     {
       "required": ["stac_item"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["external_source"] }] }
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["external_source"] }, { "required": ["ept_source"] }] }
     },
     {
       "required": ["external_source"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["stac_item"] }] }
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["ept_source"] }] }
+    },
+    {
+      "required": ["ept_source"],
+      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }] }
     }
   ],
   "definitions": {
@@ -476,6 +484,33 @@
         "expand": {
           "type": "boolean",
           "description": "true: href's Items/child-Collections each become their own pointcloud.org dataset (dry-run only as of 2026-08-01, see externalCatalog.ts). false/omitted: href itself is a single Collection to mirror as this one dataset."
+        }
+      }
+    },
+    "eptSourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href"],
+      "properties": {
+        "href": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "ept\\.json$",
+          "description": "URL to an Entwine Point Tile (EPT) resource's root document -- must end in \"ept.json\", the exact suffix both PDAL's readers.ept auto-detection and Eptium's own in-browser viewer key off of."
+        },
+        "ept_catalog_id": {
+          "type": "string",
+          "description": "The id this resource is cataloged under in USGS's own EPT STAC catalog (https://usgs-lidar-stac.s3-us-west-2.amazonaws.com/ept/catalog.json), if any -- purely informational provenance, never dereferenced at ingest time."
+        },
+        "pointcloud_org": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "copc_resolution": {
+              "type": "number",
+              "description": "Optional override/hint for the point-cloud octree resolution to expose in the generated STAC Item and Eptium viewer -- same name as stac_item's own override despite referring to an EPT resource, since EPT and COPC share the same octree-resolution concept."
+            }
+          }
         }
       }
     },
