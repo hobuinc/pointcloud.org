@@ -50,6 +50,11 @@ pointcloud_org:
 # here, not `stac_item` (that form exists for datasets we *don't* host
 # ourselves, see autzen-2023's `federate: true` for the "we want our
 # own copy but the contributor's is the source of truth" case).
+# Re-trigger (2026-08-06): re-ingest to pick up assets.data.type
+# (COPC media type) on this Item -- this dataset was first ingested
+# before mediaTypeForHref() shipped in the ingest Worker, so its stored
+# STAC Item never got the field written at all (confirmed missing from
+# a live /stac/search response; not a caching issue).
 items:
 - id: autzen-classified
   assets:
