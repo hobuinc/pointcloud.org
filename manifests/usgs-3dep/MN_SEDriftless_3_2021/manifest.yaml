@@ -76,6 +76,13 @@ pointcloud_org:
 # EPT assets and builds STAC/metadata straight from ept.json's own root
 # document -- see pointcloud.org-infrastructure's server.py for why the
 # real PDAL scan hung on a dataset this size regardless of resolution.
+#
+# Re-trigger (2026-08-06, again): drops the assets.data.type assertion
+# (application/vnd.entwine+json was never a real/registered media type,
+# and misleading besides -- an ept.json root is an index into a whole
+# tree of files, not a self-contained resource); adds proj:geometry/
+# proj:wkt2/proj:projjson, all derivable from ept.json's own srs field
+# without touching real point data.
 ept_source:
   href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_SEDriftless_3_2021/ept.json
   ept_catalog_id: MN_SEDriftless_3_2021
