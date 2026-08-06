@@ -83,6 +83,11 @@ pointcloud_org:
 # tree of files, not a self-contained resource); adds proj:geometry/
 # proj:wkt2/proj:projjson, all derivable from ept.json's own srs field
 # without touching real point data.
+# Re-trigger retry (2026-08-06): first attempt after the container
+# redeploy landed while that dataset's container instance was still
+# warm from the previous run and hadn't picked up the new image yet
+# (see PLAN.md/memory on Cloudflare Container instance staleness) --
+# retrying now that it should have gone idle and be evicted.
 ept_source:
   href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_SEDriftless_3_2021/ept.json
   ept_catalog_id: MN_SEDriftless_3_2021
