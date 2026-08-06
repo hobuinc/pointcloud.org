@@ -72,6 +72,10 @@ pointcloud_org:
     enabled: true
     default_asset_id: MN_SEDriftless_3_2021
 
+# Re-trigger (2026-08-06): container now skips readers.ept entirely for
+# EPT assets and builds STAC/metadata straight from ept.json's own root
+# document -- see pointcloud.org-infrastructure's server.py for why the
+# real PDAL scan hung on a dataset this size regardless of resolution.
 ept_source:
   href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_SEDriftless_3_2021/ept.json
   ept_catalog_id: MN_SEDriftless_3_2021
