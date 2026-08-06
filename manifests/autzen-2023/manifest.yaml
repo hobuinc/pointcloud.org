@@ -67,6 +67,11 @@ pointcloud_org:
   # would be named.
   federate: true
 
+# Re-trigger (2026-08-06): re-ingest to pick up assets.data.type
+# (COPC media type) on this Item -- this dataset was first ingested
+# before mediaTypeForHref() shipped in the ingest Worker, so its stored
+# STAC Item never got the field written at all (confirmed missing from
+# a live /stac/search response; not a caching issue).
 items:
   - id: autzen-2023
     assets:
