@@ -6,6 +6,7 @@ schema_version: 2
 # 2026-08-05 against the FGDC/ISO XML at
 # https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/vendor_provided_xml/MN%20SE%20Driftless%203%202021_WU228972_Classified_Point_Cloud_Metadata.xml
 # and the EPT resource's own ept.json. First pointcloud.org dataset
+# Re-triggered 2026-08-07 for the EPT assets.data title/roles fix.
 # ingested via `ept_source` -- see manifests/README.md.
 type: Collection
 stac_version: "1.0.0"
