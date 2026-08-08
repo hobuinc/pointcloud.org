@@ -237,7 +237,11 @@ Exactly one of these four:
   ```yaml
   ept_source:
     href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/my-project/ept.json
-    ept_catalog_id: USGS_LPC_My_Project_2021  # optional, purely informational
+    ept_catalog_id: USGS_LPC_My_Project_2021  # optional; if set, also used to look up
+                                               # real start_datetime/end_datetime from
+                                               # USGS's WESM CSV at ingest time (an
+                                               # ept.json root document has no
+                                               # acquisition-date field of its own)
     pointcloud_org:
       copc_resolution: 1   # optional override; falls back to a conservative default
   ```

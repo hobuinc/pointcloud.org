@@ -500,7 +500,7 @@
         },
         "ept_catalog_id": {
           "type": "string",
-          "description": "The id this resource is cataloged under in USGS's own EPT STAC catalog (https://usgs-lidar-stac.s3-us-west-2.amazonaws.com/ept/catalog.json), if any -- purely informational provenance, never dereferenced at ingest time."
+          "description": "The id this resource is cataloged under in USGS's own EPT STAC catalog (https://usgs-lidar-stac.s3-us-west-2.amazonaws.com/ept/catalog.json), if any. Also used at ingest time as the join key into USGS's WESM (Workunit Extent Spatial Metadata) CSV -- when set, it's looked up there to populate the generated STAC Item's start_datetime/end_datetime, since an EPT resource's own root ept.json document has no acquisition-date field of its own. Leave unset to skip that lookup (the Item's datetime, start_datetime, and end_datetime will all be left unset)."
         },
         "pointcloud_org": {
           "type": "object",
