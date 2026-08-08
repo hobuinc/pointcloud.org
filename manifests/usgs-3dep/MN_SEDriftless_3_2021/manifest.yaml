@@ -89,6 +89,9 @@ pointcloud_org:
 # warm from the previous run and hadn't picked up the new image yet
 # (see PLAN.md/memory on Cloudflare Container instance staleness) --
 # retrying now that it should have gone idle and be evicted.
+# Re-trigger (2026-08-08): WESM-sourced start_datetime/end_datetime fix landed --
+# verifying the item now carries real acquisition dates from USGS's WESM CSV
+# instead of datetime:null with no start/end at all.
 ept_source:
   href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_SEDriftless_3_2021/ept.json
   ept_catalog_id: MN_SEDriftless_3_2021
