@@ -1,0 +1,82 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, Digital Aerial Solutions, LLC 2020, part of
+# a 12-dataset Iowa batch ingest (all IA_* workunits except
+# IA_FullState). This vendor's FGDC XML does not disclose a USGS
+# contract number for this project (checked directly against the raw
+# metadata text, not a scraping gap) -- see the citation below for
+# the tri-agency USGS/NRCS/IDALS sponsorship it does document.
+# Metadata cross-checked 2026-08-09 against the FGDC XML at the href
+# in metadata_links below, USGS's WESM.csv, and the EPT resource's
+# own ept.json. Ingested via `ept_source` -- see manifests/README.md.
+type: Collection
+stac_version: "1.0.0"
+id: IA_SouthCentral_1_2020
+title: IA South Central 1 2020 Lidar
+description: >
+  Classified airborne lidar point cloud covering the D1 delivery of the
+  South Central Iowa lidar project (D20), part of a roughly 10,238 square-
+  mile project area, collected April 2020 by Digital Aerial Solutions, LLC
+  for the USGS 3D Elevation Program (3DEP) in cooperation with the USDA
+  Natural Resources Conservation Service (NRCS) and the Iowa Department of
+  Agriculture and Land Stewardship (IDALS), as part of the "IA SouthCentral
+  2020 D20" project. Acquired at QL2 spec meeting the USGS National
+  Geospatial Program Base Lidar Specification, Version 2.1. Served here
+  directly from USGS's public Entwine Point Tile (EPT) bucket via
+  `ept_source` -- not copied into pointcloud.org's own storage.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [iowa, usgs, 3dep, lidar, south-central-iowa, entwine, ept, digital-aerial-solutions]
+providers:
+  - name: Digital Aerial Solutions, LLC
+    roles: [producer]
+    url: https://digitalaerial.com/
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+links:
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_SouthCentral_2020_D20/IA_SouthCentral_1_2020/reports/USGS_IA_SouthCentral_1_2020_Summary_Report.pdf
+extent:
+  temporal:
+    interval:
+      - ["2020-04-14", "2020-05-08"]
+
+"sci:citation": >
+  Digital Aerial Solutions, LLC (2021). South Central Iowa Lidar (D1);
+  Project ID: 190537 - WU190534; Classified Point Cloud. U.S. Geological
+  Survey 3D Elevation Program, in cooperation with the USDA Natural
+  Resources Conservation Service (NRCS) and the Iowa Department of
+  Agriculture and Land Stewardship (IDALS).
+
+pointcloud_org:
+  derivatives: false
+  publication_date: 2021-02-17
+  spatial_reference:
+    id: "EPSG:6344"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6344
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  metadata_links:
+    - title: FGDC Classified Point Cloud Metadata (XML)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_SouthCentral_2020_D20/IA_SouthCentral_1_2020/reports/vendor_provided_xml/IA_SouthCentral_2020_D20_D1_Classified_LAS.xml"
+    - title: USGS Lidar Report
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_SouthCentral_2020_D20/IA_SouthCentral_1_2020/reports/IA_SouthCentral_2020_D20_LiDAR_Report.pdf"
+    - title: USGS Summary Report
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_SouthCentral_2020_D20/IA_SouthCentral_1_2020/reports/USGS_IA_SouthCentral_1_2020_Summary_Report.pdf"
+  viewer:
+    enabled: true
+    default_asset_id: IA_SouthCentral_1_2020
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/IA_SouthCentral_1_2020/ept.json
+  ept_catalog_id: IA_SouthCentral_1_2020
+  pointcloud_org:
+    copc_resolution: 1
