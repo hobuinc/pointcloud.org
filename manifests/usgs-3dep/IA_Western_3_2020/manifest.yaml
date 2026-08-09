@@ -6,6 +6,12 @@ schema_version: 2
 # XML at the href in metadata_links below, USGS's WESM.csv, and the
 # EPT resource's own ept.json. Ingested via `ept_source` -- see
 # manifests/README.md.
+#
+# Re-trigger (2026-08-09): first ingest completed but this dataset's
+# entry was missing from stac-api's aggregate collections.json (a race
+# with the concurrently-ingesting IA_Western_2_2020) -- re-triggering
+# so this dataset's own assembly step rebuilds it fresh with no other
+# ingest running at the same time.
 type: Collection
 stac_version: "1.0.0"
 id: IA_Western_3_2020
