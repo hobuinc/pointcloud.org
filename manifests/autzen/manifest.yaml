@@ -55,6 +55,8 @@ pointcloud_org:
 # before mediaTypeForHref() shipped in the ingest Worker, so its stored
 # STAC Item never got the field written at all (confirmed missing from
 # a live /stac/search response; not a caching issue).
+# Re-trigger (2026-08-09): pick up density-targeted --readers.copc.resolution
+# + real filters.hexbin boundary geometry instead of a bbox rectangle.
 items:
 - id: autzen-classified
   assets:
