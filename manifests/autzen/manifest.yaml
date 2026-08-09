@@ -57,6 +57,9 @@ pointcloud_org:
 # a live /stac/search response; not a caching issue).
 # Re-trigger (2026-08-09): pick up density-targeted --readers.copc.resolution
 # + real filters.hexbin boundary geometry instead of a bbox rectangle.
+# Re-trigger (2026-08-09, again): verifying the richer ingest-
+# completion PR comment reports real HEAD-derived byte size for a
+# hosted (non-EPT) COPC asset.
 items:
 - id: autzen-classified
   assets:
