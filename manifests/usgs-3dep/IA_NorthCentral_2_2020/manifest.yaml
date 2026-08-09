@@ -1,0 +1,74 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, Aerial Services, Inc. 2020, part of a
+# 12-dataset Iowa batch ingest (all IA_* workunits except
+# IA_FullState). Metadata cross-checked 2026-08-09 against the FGDC
+# XML at the href in metadata_links below, USGS's WESM.csv, and the
+# EPT resource's own ept.json. Ingested via `ept_source` -- see
+# manifests/README.md.
+type: Collection
+stac_version: "1.0.0"
+id: IA_NorthCentral_2_2020
+title: IA North Central 2 2020 Lidar
+description: >
+  Classified airborne lidar point cloud covering approximately 6,132 square
+  miles of the Iowa North Central project's Block 3 area -- Carroll, Greene,
+  Guthrie, Boone, Dallas, Story, Polk, Marshall, Jasper, and Tama Counties
+  -- collected April 2020 by Aerial Services, Inc. for the USGS 3D Elevation
+  Program (3DEP) as part of the "IA NorthCentral 2020 D20" project. Acquired
+  at QL2 spec (nominal pulse spacing 0.71m) meeting the USGS National
+  Geospatial Program Base Lidar Specification, Version 2.1. Served here
+  directly from USGS's public Entwine Point Tile (EPT) bucket via
+  `ept_source` -- not copied into pointcloud.org's own storage.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [iowa, usgs, 3dep, lidar, north-central-iowa, entwine, ept, aerial-services]
+providers:
+  - name: Aerial Services, Inc.
+    roles: [producer]
+    url: https://aerialservicesinc.com/
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+links:
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_NorthCentral_2020_D20/IA_NorthCentral_2_2020/reports/USGS_IA_NorthCentral_2_2020_Summary_Report.pdf
+extent:
+  temporal:
+    interval:
+      - ["2020-04-16", "2020-04-27"]
+
+"sci:citation": >
+  Aerial Services, Inc. (2021). Block 3 IA North Central, Iowa Lidar;
+  Project ID: 190802 - WU219327; Classified Point Cloud. U.S. Geological
+  Survey 3D Elevation Program. USGS Contract No. G17PC00006.
+
+pointcloud_org:
+  derivatives: false
+  publication_date: 2021-11-24
+  spatial_reference:
+    id: "EPSG:6344"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6344
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  metadata_links:
+    - title: FGDC Classified Point Cloud Metadata (XML)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_NorthCentral_2020_D20/IA_NorthCentral_2_2020/reports/vendor_provided_xml/ClassifiedPointCloud_2.1_Block_3_IA_NorthCentral.xml"
+    - title: USGS Summary Report
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_NorthCentral_2020_D20/IA_NorthCentral_2_2020/reports/USGS_IA_NorthCentral_2_2020_Summary_Report.pdf"
+  viewer:
+    enabled: true
+    default_asset_id: IA_NorthCentral_2_2020
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/IA_NorthCentral_2_2020/ept.json
+  ept_catalog_id: IA_NorthCentral_2_2020
+  pointcloud_org:
+    copc_resolution: 1
