@@ -1,0 +1,74 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, Aerial Services, Inc. 2020-2021, part of a
+# 12-dataset Iowa batch ingest (all IA_* workunits except
+# IA_FullState). Metadata cross-checked 2026-08-09 against the FGDC
+# XML at the href in metadata_links below, USGS's WESM.csv, and the
+# EPT resource's own ept.json. Ingested via `ept_source` -- see
+# manifests/README.md.
+type: Collection
+stac_version: "1.0.0"
+id: IA_Western_1_2020
+title: IA Western 1 2020 Lidar
+description: >
+  Classified airborne lidar point cloud covering approximately 2,691 square
+  miles of western Iowa -- Lyon, Sioux, Plymouth, Woodbury, Monona, and
+  Harrison Counties -- collected November 2020 through March 2021 by Aerial
+  Services, Inc. for the USGS 3D Elevation Program (3DEP) as part of the "IA
+  WesternIA 2020 D21" project. Acquired at QL2 spec (nominal pulse spacing
+  0.71m) meeting the USGS National Geospatial Program Base Lidar
+  Specification, Version 2020 Revision A. Served here directly from USGS's
+  public Entwine Point Tile (EPT) bucket via `ept_source` -- not copied into
+  pointcloud.org's own storage.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [iowa, usgs, 3dep, lidar, western-iowa, entwine, ept, aerial-services]
+providers:
+  - name: Aerial Services, Inc.
+    roles: [producer]
+    url: https://aerialservicesinc.com/
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+links:
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_WesternIA_2020_D21/IA_Western_1_2020/reports/USGS_IA_Western_1_2020_Summary_Report.pdf
+extent:
+  temporal:
+    interval:
+      - ["2020-11-27", "2021-03-29"]
+
+"sci:citation": >
+  Aerial Services, Inc. (2022). USGS_IA_Western_1_2020_D21, Iowa Lidar;
+  Project ID: 212610 - WU212607; Classified Point Cloud. U.S. Geological
+  Survey 3D Elevation Program. USGS Contract No. G17PC00007.
+
+pointcloud_org:
+  derivatives: false
+  publication_date: 2022-11-07
+  spatial_reference:
+    id: "EPSG:6343"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6343
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  metadata_links:
+    - title: FGDC Classified Point Cloud Metadata (XML)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_WesternIA_2020_D21/IA_Western_1_2020/reports/vendor_provided_xml/ClassifiedPointCloud_2020-A_USGS_IA_Western_1_2020_D21.xml"
+    - title: USGS Summary Report
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_WesternIA_2020_D21/IA_Western_1_2020/reports/USGS_IA_Western_1_2020_Summary_Report.pdf"
+  viewer:
+    enabled: true
+    default_asset_id: IA_Western_1_2020
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/IA_Western_1_2020/ept.json
+  ept_catalog_id: IA_Western_1_2020
+  pointcloud_org:
+    copc_resolution: 1
