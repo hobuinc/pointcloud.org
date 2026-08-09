@@ -74,6 +74,8 @@ pointcloud_org:
     enabled: true
     default_asset_id: IA_Western_3_2020
 
+# Re-trigger (2026-08-09, again): verifying the richer ingest-
+# completion PR comment (points/size/footprint map) lands correctly.
 ept_source:
   href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/IA_Western_3_2020/ept.json
   ept_catalog_id: IA_Western_3_2020
