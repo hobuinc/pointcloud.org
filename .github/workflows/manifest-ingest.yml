@@ -602,33 +602,11 @@ jobs:
       pull-requests: write
       issues: write
     env:
-      # Falls back to the default GITHUB_TOKEN until REINGEST_PAT is
-      # added as a repo secret, so this job keeps working either way --
-      # but a PR opened with the default token is authored by
-      # github-actions[bot], which GitHub's bot-PR approval gate
-      # (added 2026-06) always flags "action_required" with zero jobs
-      # run on that PR's own pull_request:opened event -- confirmed via
-      # GET .../actions/permissions/fork-pr-contributor-approval that no
-      # approval-policy tier exempts bot-authored PRs, only real users.
-      # REINGEST_PAT should be a fine-grained PAT scoped to just this
-      # repo (Contents: Read & write, Pull requests: Read & write,
-      # Issues: Read & write -- the last one is needed to remove the
-      # reingest label at the end of this job),
-      # owned by an actual maintainer with write access -- PRs authored
-      # by a real person never hit this gate at all. This doesn't affect
-      # the reingest label's own comment/merge steps below, which
-      # already run under this job's own real permissions regardless --
-      # it only affects whether the *new* PR's decorative validate/
-      # check-federate/etc. checks actually execute.
-      GH_TOKEN: ${{ secrets.REINGEST_PAT || github.token }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
-      - name: Point git push at the same token gh CLI is using
-        run: |
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
       - name: Determine which dataset the original PR touched
         id: dataset
         run: |
