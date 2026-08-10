@@ -125,7 +125,9 @@ jobs:
           git push origin "$BRANCH"
           PR_URL=$(gh pr create \
             --title "Reingest ${DATASET_ID}" \
-            --body "Triggered by applying the \`reingest\` label to #${{ github.event.pull_request.number }} -- no content change, just a re-touch of \`${FILE}\` to re-run ingest for \`${DATASET_ID}\`." \
+            --body "Triggered by applying the \`reingest\` label to #${{ github.event.pull_request.number }} -- no content change, just a re-touch of \`${FILE}\` to re-run ingest for \`${DATASET_ID}\`.
+
+          You'll see **two** \`Manifest ingest\` runs on this PR in the Actions tab, seconds apart -- that's expected, not a duplicate ingest. This PR gets opened and merged automatically back to back, so the normal open-event dry-run preflight and the merge-event real ingest trigger both fire almost immediately: same two-run lifecycle every manifest PR has, just compressed in time instead of spread across a human review." \
             --base main --head "$BRANCH")
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           # Merge immediately rather than `gh pr merge --auto`: this repo
