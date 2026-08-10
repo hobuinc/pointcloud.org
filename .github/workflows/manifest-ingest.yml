@@ -623,6 +623,9 @@ jobs:
           fi
           echo "manifest_path=$FILE" >> "$GITHUB_OUTPUT"
           echo "dataset_id=$(basename "$(dirname "$FILE")")" >> "$GITHUB_OUTPUT"
+      - name: Announce the reingest before doing it
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "🔄 Reingesting \`${{ steps.dataset.outputs.manifest_path }}\` (dataset \`${{ steps.dataset.outputs.dataset_id }}\`) from this PR, requested by @${{ github.event.sender.login }} via the \`reingest\` label..."
       - name: Re-touch manifest and open a reingest PR
         id: reingest
         run: |
