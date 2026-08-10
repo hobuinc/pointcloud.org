@@ -71,3 +71,4 @@ ept_source:
   pointcloud_org:
     copc_resolution: 1
 # reingest-flow-verification touch (2026-08-10T16:13:53Z)
+# reingest requested via #103 by @hobu on 2026-08-10T16:16:51Z
