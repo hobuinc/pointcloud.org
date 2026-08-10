@@ -36,10 +36,22 @@ on:
     # `reingest` label to an already-merged/closed PR is the trigger
     # for a fresh, no-content-change ingest re-run -- see that job's
     # doc comment.
+    #
+    # No `paths:` filter (2026-08-10, removed) -- a `labeled` action has
+    # no associated commit/diff, so GitHub Actions can't evaluate a
+    # `paths` filter against it at all and just silently never runs the
+    # workflow (confirmed directly: applying the `reingest` label to a
+    # real merged PR produced a real "labeled" timeline event but zero
+    # workflow runs, no error, nothing -- `paths` filtering and
+    # `labeled`/`unlabeled`/`assigned`-style metadata-only actions are
+    # fundamentally incompatible, not a config mistake to fix). Every
+    # job below already re-derives "does this PR even touch
+    # manifests/?" itself from `changed`'s own PR-files-API call (not
+    # GitHub's push-diff paths engine), so removing this costs a few
+    # extra cheap `changed`-job runs on PRs that don't touch
+    # manifests/ at all, not correctness.
     types: [opened, synchronize, reopened, closed, labeled]
     branches: [main]
-    paths:
-      - "manifests/**"
 
 jobs:
   # Which dataset directories this PR actually touches -- shared by
