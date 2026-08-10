@@ -1,5 +1,5 @@
 schema_version: 2
-# re-ingest trigger: verify EPT elevation-range fix (2026-08-10)
+# re-ingest trigger: verify EPT elevation-range fix (2026-08-10), attempt 2
 
 # USGS 3DEP acquisition, part of a Minnesota batch ingest (83 MN_* workunits
 # identified via WESM.csv; only 35 have USGS EPT hosting -- ingested in this
