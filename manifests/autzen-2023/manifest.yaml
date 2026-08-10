@@ -86,3 +86,4 @@ items:
     pointcloud_org:
       # Matches the survey's own nominal pulse spacing (0.22m).
       copc_resolution: 0.22
+# federated-label verification touch (2026-08-10T16:20:04Z)

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/pointcloud-logo.svg" alt="pointcloud.org logo" width="96" height="96">
+</p>
+
 # pointcloud.org
 
 A public archive of [Cloud Optimized Point Cloud](https://copc.io) (COPC)
