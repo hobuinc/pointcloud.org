@@ -63,3 +63,4 @@ ept_source:
   ept_catalog_id: MN_UpperMissRiver_6_B22
   pointcloud_org:
     copc_resolution: 1
+# reingest requested via #94 by @hobu on 2026-08-10T20:22:43Z
