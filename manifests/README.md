@@ -390,9 +390,9 @@ entry pointing at the copy once federation completes. Use `federate`
 when a dataset's source host isn't reliably durable long-term (a
 personal server, a time-limited hosting arrangement) and the intent is
 to actually archive a copy here. A PR whose manifest sets this gets a
-`federate` label and a comment calling it out, since it's a
-meaningfully different commitment than the default (link out, don't
-copy).
+`federated` label and a comment calling it out (including an estimated
+size, in GB, of what will be copied), since it's a meaningfully
+different commitment than the default (link out, don't copy).
 
 A `metadata_links[].href` may be a plain relative filename -- put the
 file in `manifests/<dataset-id>/` alongside `manifest.yaml`, and the
@@ -460,6 +460,19 @@ and from the root STAC Catalog. Its underlying point-cloud data is
 **not** deleted -- removing a dataset here only removes it from the
 *index* (the site and STAC output), the archived data itself stays in
 storage.
+
+## Reingesting a dataset
+
+To re-run ingest for a dataset that's already live -- picking up an
+infrastructure-side fix, for example, with no manifest content change
+needed -- apply the `reingest` label to the PR that originally
+added/updated it (any merged PR under `manifests/<dataset-id>/` works,
+not just the very first one). This opens a new, tiny PR that re-touches
+that dataset's `manifest.yaml` (a no-op comment line, nothing else
+changes) and merges it automatically once checks pass, which re-runs
+the same ingest pipeline end to end. A comment gets posted back on the
+PR you labeled, linking to the new one. The label removes itself once
+processed, so it can be reapplied later for another reingest.
 
 ## License
 

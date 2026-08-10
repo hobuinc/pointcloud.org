@@ -32,7 +32,11 @@ name: Manifest ingest
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    # "labeled" added for the reingest job below: applying the
+    # `reingest` label to an already-merged/closed PR is the trigger
+    # for a fresh, no-content-change ingest re-run -- see that job's
+    # doc comment.
+    types: [opened, synchronize, reopened, closed, labeled]
     branches: [main]
     paths:
       - "manifests/**"
@@ -141,7 +145,7 @@ jobs:
   # if `validate` also happens to run against the same file list.
   reject-multi-dataset-pr:
     needs: changed
-    if: github.event.action != 'closed' && needs.changed.outputs.too_many_datasets == 'true'
+    if: github.event.action != 'closed' && github.event.action != 'labeled' && needs.changed.outputs.too_many_datasets == 'true'
     runs-on: ubuntu-latest
     # Explicit, in addition to (not instead of) `validate`'s own refusal
     # to run against multiple manifest paths (see
@@ -213,7 +217,7 @@ jobs:
   # not a real validation run.
   validate:
     needs: changed
-    if: github.event.action != 'closed'
+    if: github.event.action != 'closed' && github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -234,7 +238,7 @@ jobs:
   # this PR touched.
   check-reachability:
     needs: changed
-    if: github.event.action != 'closed' && needs.changed.outputs.manifest_files != ''
+    if: github.event.action != 'closed' && github.event.action != 'labeled' && needs.changed.outputs.manifest_files != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -254,7 +258,7 @@ jobs:
   # is easy to depend on independently.
   check-federate:
     needs: changed
-    if: github.event.action != 'closed' && needs.changed.outputs.manifest_files != ''
+    if: github.event.action != 'closed' && github.event.action != 'labeled' && needs.changed.outputs.manifest_files != ''
     runs-on: ubuntu-latest
     outputs:
       federate: ${{ steps.check.outputs.federate }}
@@ -278,7 +282,7 @@ jobs:
   # See manifests/README.md's "How ingest actually happens" section.
   dispatch-preflight:
     needs: [changed, validate]
-    if: github.event.action != 'closed' && needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    if: github.event.action != 'closed' && github.event.action != 'labeled' && needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch preflight to pointcloud.org-infrastructure
@@ -300,7 +304,7 @@ jobs:
     # Only the merge path dispatches -- a PR that's closed without
     # merging (abandoned) should never kick off ingest.
     needs: changed
-    if: github.event.pull_request.merged == true && needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    if: github.event.pull_request.merged == true && github.event.action != 'labeled' && needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     steps:
       # No checkout/npm install here -- this job used to build the full
@@ -342,7 +346,7 @@ jobs:
   # only happens post-merge, in dispatch-removal below.
   label-and-comment-removal:
     needs: changed
-    if: github.event.action != 'closed' && needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    if: github.event.action != 'closed' && github.event.action != 'labeled' && needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     # Same fork-PR caveat as reject-multi-dataset-pr above: a fork's
     # default GITHUB_TOKEN is read-only by GitHub platform policy no
@@ -423,7 +427,7 @@ jobs:
   # build-datasets-payload.mjs step, just which dataset id to remove.
   dispatch-removal:
     needs: changed
-    if: github.event.pull_request.merged == true && needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    if: github.event.pull_request.merged == true && github.event.action != 'labeled' && needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch removal to pointcloud.org-infrastructure
@@ -463,28 +467,57 @@ jobs:
   # inside ingestRequest.ts, before any other stage).
   label-and-comment-federate:
     needs: [changed, check-federate]
-    if: github.event.action != 'closed' && needs.check-federate.outputs.federate == 'true' && needs.changed.outputs.too_many_datasets != 'true'
+    if: github.event.action != 'closed' && github.event.action != 'labeled' && needs.check-federate.outputs.federate == 'true' && needs.changed.outputs.too_many_datasets != 'true'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
       issues: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies (js-yaml)
+        run: npm install
+      # Best-effort HEAD-request size estimate of what federation.ts will
+      # actually copy -- see federate-size.mjs's doc comment for exactly
+      # what it measures and why (items[]'s foreign asset hrefs only;
+      # ept_source is never federated, and a stac_item reference's real
+      # asset hrefs aren't known without fetching that foreign document
+      # too). "unknown" (not a number) if every URL's HEAD failed to
+      # report a Content-Length -- surfaced as such in the comment below
+      # rather than silently showing 0 GB.
+      - name: Estimate federated dataset size
+        id: size
+        run: echo "bytes=$(node scripts/federate-size.mjs ${{ needs.changed.outputs.manifest_files }})" >> "$GITHUB_OUTPUT"
       - name: Label PR and post federate notice
         uses: actions/github-script@v7
+        env:
+          FEDERATE_SIZE_BYTES: ${{ steps.size.outputs.bytes }}
         with:
           script: |
             const datasetIds = ${{ needs.changed.outputs.dataset_ids }};
             const datasetId = datasetIds[0];
 
+            const rawBytes = process.env.FEDERATE_SIZE_BYTES;
+            const sizeLine =
+              rawBytes === "unknown" || !rawBytes
+                ? "unknown (one or more source URLs didn't report a size)"
+                : `~${(Number(rawBytes) / 1024 ** 3).toFixed(2)} GB`;
+
             try {
+              // Adding a label name that doesn't exist yet on this repo
+              // auto-creates it (default color) -- no separate "ensure
+              // label exists" step needed, same as label-and-comment-
+              // removal's "removal" label above.
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
-                labels: ["federate"],
+                labels: ["federated"],
               });
             } catch (err) {
-              core.warning(`could not add the "federate" label: ${err.message}`);
+              core.warning(`could not add the "federated" label: ${err.message}`);
             }
 
             const marker = "<!-- pointcloud:federate-notice -->";
@@ -492,7 +525,9 @@ jobs:
               marker,
               `### This PR requests \`federate: true\` for \`${datasetId}\``,
               "",
-              `Merging this PR will copy **${datasetId}**'s asset data from wherever this manifest currently points into pointcloud.org's own storage, at ingest time -- not just link out to it. Every later stage (metadata extraction, derivatives, the hero image) will then use that copy, and pointcloud.org's own record of this dataset's manifest will be rewritten to point at it.`,
+              `**This dataset's data will be copied into pointcloud.org's own storage, not just referenced.** Merging this PR copies **${datasetId}**'s asset data from wherever this manifest currently points into pointcloud.org's own bucket, at ingest time. Every later stage (metadata extraction, derivatives, the hero image) will then use that copy, and pointcloud.org's own record of this dataset's manifest will be rewritten to point at it.`,
+              "",
+              `**Estimated size to copy:** ${sizeLine}`,
               "",
               "This does not change the manifest committed in this repo -- only pointcloud.org's own internal record of where the data actually lives.",
             ].join("\n");
@@ -523,3 +558,88 @@ jobs:
             } catch (err) {
               core.warning(`could not post the federate notice comment: ${err.message}`);
             }
+
+  # Self-service re-ingest: applying the `reingest` label to an already-
+  # merged PR (the PR that originally added/updated that dataset)
+  # re-runs the whole ingest pipeline for it, without needing a human to
+  # hand-author a no-op commit the way every earlier re-trigger in this
+  # project's history required (see e.g. autzen's/barringer's manifest
+  # comments -- "Re-trigger (2026-0X-XX): ..."). Mechanically identical
+  # to what those manual re-triggers did: re-touch the dataset's
+  # manifest.yaml (a comment-line append -- no real content change) on a
+  # fresh branch, open a PR, and let the normal dispatch-ingest job
+  # (which only cares that manifests/ changed and the PR merged, not
+  # *what* changed) do the rest.
+  #
+  # Gated on `pull_request.merged == true` -- applying this label to a
+  # still-open PR wouldn't make sense (just push more commits to that
+  # same PR instead), and to a closed-but-unmerged one even less so
+  # (nothing was ever ingested from it).
+  #
+  # Same fork-PR caveat as reject-multi-dataset-pr/label-and-comment-
+  # removal above: a fork's default GITHUB_TOKEN is read-only by GitHub
+  # platform policy, so the label-add/comment steps below can silently
+  # fail to post for a fork contributor specifically -- labeling
+  # generally requires triage/write access to this repo anyway, though,
+  # so in practice this only ever fires for a maintainer.
+  reingest:
+    if: github.event.action == 'labeled' && github.event.label.name == 'reingest' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine which dataset the original PR touched
+        id: dataset
+        run: |
+          FILE=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate \
+            --jq '.[] | select(.filename | test("^manifests/.*/manifest\\.yaml$")) | select(.status != "removed") | .filename' \
+            | head -n1)
+          if [ -z "$FILE" ]; then
+            echo "::error::could not find a manifests/**/manifest.yaml touched by PR #${{ github.event.pull_request.number }} -- nothing to reingest"
+            exit 1
+          fi
+          if [ ! -f "$FILE" ]; then
+            echo "::error::$FILE no longer exists on main (dataset removed since that PR) -- nothing to reingest"
+            exit 1
+          fi
+          echo "manifest_path=$FILE" >> "$GITHUB_OUTPUT"
+          echo "dataset_id=$(basename "$(dirname "$FILE")")" >> "$GITHUB_OUTPUT"
+      - name: Re-touch manifest and open a reingest PR
+        id: reingest
+        run: |
+          set -e
+          FILE="${{ steps.dataset.outputs.manifest_path }}"
+          DATASET_ID="${{ steps.dataset.outputs.dataset_id }}"
+          BRANCH="reingest-${DATASET_ID}-$(date -u +%Y%m%d%H%M%S)"
+          git config user.name "pointcloud-org-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          echo "# reingest requested via #${{ github.event.pull_request.number }} by @${{ github.event.sender.login }} on $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$FILE"
+          git add "$FILE"
+          git commit -m "Reingest ${DATASET_ID} (requested via #${{ github.event.pull_request.number }})"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "Reingest ${DATASET_ID}" \
+            --body "Triggered by applying the \`reingest\` label to #${{ github.event.pull_request.number }} -- no content change, just a re-touch of \`${FILE}\` to re-run ingest for \`${DATASET_ID}\`." \
+            --base main --head "$BRANCH")
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          # Best-effort: only actually merges once required checks pass, and
+          # is a silent no-op (not a failure) if this repo doesn't have
+          # auto-merge enabled -- either way the PR above still exists for
+          # a human to merge by hand.
+          gh pr merge --auto --squash "$PR_URL" || echo "::warning::could not enable auto-merge on $PR_URL -- merge it manually to complete the reingest"
+      - name: Comment on the original PR
+        if: always() && steps.reingest.outputs.pr_url != ''
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "🔄 Reingest requested by @${{ github.event.sender.login }} via the \`reingest\` label -- opened ${{ steps.reingest.outputs.pr_url }} to re-run ingest for \`${{ steps.dataset.outputs.dataset_id }}\`."
+      - name: Remove the reingest label so it can be reapplied later
+        if: always()
+        run: |
+          gh api -X DELETE "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/reingest" || true
