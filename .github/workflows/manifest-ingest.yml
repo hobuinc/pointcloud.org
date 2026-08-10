@@ -642,11 +642,36 @@ jobs:
             --body "Triggered by applying the \`reingest\` label to #${{ github.event.pull_request.number }} -- no content change, just a re-touch of \`${FILE}\` to re-run ingest for \`${DATASET_ID}\`." \
             --base main --head "$BRANCH")
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-          # Best-effort: only actually merges once required checks pass, and
-          # is a silent no-op (not a failure) if this repo doesn't have
-          # auto-merge enabled -- either way the PR above still exists for
-          # a human to merge by hand.
-          gh pr merge --auto --squash "$PR_URL" || echo "::warning::could not enable auto-merge on $PR_URL -- merge it manually to complete the reingest"
+          # Merge immediately rather than `gh pr merge --auto`: this repo
+          # has no branch protection on main and no required status
+          # checks (confirmed 2026-08-10 -- GET .../branches/main/protection
+          # 404s), so there is nothing an --auto merge would actually be
+          # waiting on. --auto instead depends on the repo's own "Allow
+          # auto-merge" setting, which is off here -- that made `gh pr
+          # merge --auto` a silent no-op, so applying the `reingest` label
+          # opened a PR that just sat there until someone merged it by
+          # hand, instead of actually firing a reingest. A direct
+          # `gh pr merge --squash` has the same fallback (a merge conflict
+          # or a future branch-protection rule would make this fail
+          # loudly instead of silently) but actually completes the
+          # reingest end-to-end when nothing is blocking it, which today
+          # is always.
+          # GitHub computes a PR's mergeable state asynchronously right
+          # after creation, so a merge attempted immediately can
+          # transiently fail with "Pull request is not mergeable" even
+          # though nothing is actually blocking it -- retry briefly
+          # before giving up and falling back to a warning.
+          merged=false
+          for attempt in 1 2 3 4 5 6; do
+            if gh pr merge --squash "$PR_URL"; then
+              merged=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$merged" != "true" ]; then
+            echo "::warning::could not merge $PR_URL after retrying -- merge it manually to complete the reingest"
+          fi
       - name: Comment on the original PR
         if: always() && steps.reingest.outputs.pr_url != ''
         run: |
