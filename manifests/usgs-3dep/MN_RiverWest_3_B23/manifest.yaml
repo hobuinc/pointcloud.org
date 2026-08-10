@@ -62,3 +62,4 @@ ept_source:
   ept_catalog_id: MN_RiverWest_3_B23
   pointcloud_org:
     copc_resolution: 1
+# reingest requested via #98 by @pointcloud-org on 2026-08-10T20:11:00Z
