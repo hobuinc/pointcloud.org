@@ -1,0 +1,71 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, part of a Minnesota batch ingest (83 MN_* workunits
+# identified via WESM.csv; only 35 have USGS EPT hosting -- ingested in this
+# pass; the other 48 pre-2018 legacy workunits have no Entwine-processed data
+# and are deferred to a possible future federate-based pass -- see
+# memory/PLAN.md). Vendor/spec facts come from the project-wide
+# MNDNR_Metadata_Point_Cloud_Final.xml (boilerplate reused across all 25
+# Minnesota River Basin workunits, confirmed byte-identical across 9 of them)
+# -- no USGS contract number is disclosed anywhere in that document; this was
+# funded directly by MnDNR, not a standard USGS 3DEP contract.
+type: Collection
+stac_version: "1.0.0"
+id: MN_KANDIYOHICO_2010
+title: MN Kandiyohi County 2010 Lidar
+description: >
+  Classified airborne lidar point cloud covering Kandiyohi County, Minnesota,
+  collected 2010-04-08 through 2011-11-19 by AeroMetric, Inc. for the
+  Minnesota Department of Natural Resources (MnDNR) as part of the "MN
+  Kandiyohi County 2010" project, acquired at a nominal post spacing of 1.3m
+  (Optech Gemini sensor, per the project-wide FGDC metadata) meeting the
+  Minnesota River Basin LiDAR Acquisition project specification. Served here
+  directly from USGS's public Entwine Point Tile (EPT) bucket via `ept_source`
+  -- not copied into pointcloud.org's own storage, so this Collection's single
+  item streams live from USGS's own infrastructure.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [minnesota, usgs, 3dep, lidar, entwine, ept, minnesota-river-basin, aerometric, mndnr]
+providers:
+  - name: AeroMetric, Inc.
+    roles: [producer]
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+extent:
+  temporal:
+    interval:
+      - ["2010-04-08", "2011-11-19"]
+
+"sci:citation": >
+  AeroMetric, Inc. (2011). Minnesota River Basin LiDAR Acquisition, Kandiyohi
+  County; Project ID: 2824 - WU2835; Classified Point Cloud. Prepared for the
+  Minnesota Department of Natural Resources.
+
+pointcloud_org:
+  derivatives: false
+  spatial_reference:
+    id: "EPSG:26915"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/26915
+  acknowledgement: >
+    Acknowledgement of the Minnesota Department of Natural Resources (MnDNR)
+    and the U.S. Geological Survey, which hosts this data via its 3D Elevation
+    Program, would be appreciated for products derived from these data.
+  metadata_links:
+    - title: MnDNR Point Cloud FGDC Metadata (XML)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/legacy/MN_KANDIYOHICO_2010/MNDNR_Metadata_Point_Cloud_Final.xml"
+  viewer:
+    enabled: true
+    default_asset_id: MN_KANDIYOHICO_2010
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_KandiyohiCo_2010/ept.json
+  ept_catalog_id: MN_KANDIYOHICO_2010
+  pointcloud_org:
+    copc_resolution: 1
