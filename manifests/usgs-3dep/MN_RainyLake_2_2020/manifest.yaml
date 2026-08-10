@@ -1,0 +1,64 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, part of a Minnesota batch ingest (83 MN_* workunits
+# identified via WESM.csv; only 35 have USGS EPT hosting -- ingested in this
+# pass; the other 48 pre-2018 legacy workunits have no Entwine-processed data
+# and are deferred to a possible future federate-based pass -- see
+# memory/PLAN.md). Contract/task-order confirmed identical to sibling
+# MN_RainyLake_1_2020.
+type: Collection
+stac_version: "1.0.0"
+id: MN_RainyLake_2_2020
+title: MN Rainy Lake 2 2020 Lidar
+description: >
+  Classified airborne lidar point cloud collected 2021-04-16 through
+  2021-05-08 by NV5 Geospatial for the USGS 3D Elevation Program (3DEP) as
+  part of the "MN Rainy Lake 2 2020" project, acquired at QL 1 spec meeting
+  the USGS National Geospatial Program Base Lidar Specification (USGS Lidar
+  Base Specification 2.1). Served here directly from USGS's public Entwine
+  Point Tile (EPT) bucket via `ept_source` -- not copied into pointcloud.org's
+  own storage, so this Collection's single item streams live from USGS's own
+  infrastructure.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [minnesota, usgs, 3dep, lidar, entwine, ept, rainy-lake, nv5-geospatial]
+providers:
+  - name: NV5 Geospatial
+    roles: [producer]
+    url: https://www.nv5geospatial.com/
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+extent:
+  temporal:
+    interval:
+      - ["2021-04-16", "2021-05-08"]
+
+"sci:citation": >
+  NV5 Geospatial (2021). MN Rainy Lake 2 2020 Lidar; Project ID: 197392 -
+  WU300017; Classified Point Cloud. U.S. Geological Survey 3D Elevation
+  Program. USGS Contract No. G16PC00016, Task Order No. 140G0220F0248.
+
+pointcloud_org:
+  derivatives: false
+  spatial_reference:
+    id: "EPSG:6344"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6344
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  viewer:
+    enabled: true
+    default_asset_id: MN_RainyLake_2_2020
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_RainyLake_2_2020/ept.json
+  ept_catalog_id: MN_RainyLake_2_2020
+  pointcloud_org:
+    copc_resolution: 1
