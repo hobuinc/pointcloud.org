@@ -1,0 +1,168 @@
+# Self-service re-ingest: applying the `reingest` label to an already-
+# merged PR (the PR that originally added/updated that dataset) re-runs
+# the whole ingest pipeline for it, without needing a human to
+# hand-author a no-op commit the way every earlier re-trigger in this
+# project's history required (see e.g. autzen's/barringer's manifest
+# comments -- "Re-trigger (2026-0X-XX): ..."). Mechanically identical to
+# what those manual re-triggers did: re-touch the dataset's
+# manifest.yaml (a comment-line append -- no real content change) on a
+# fresh branch, open a PR, and let manifest-ingest.yml's normal
+# dispatch-ingest job (which only cares that manifests/ changed and the
+# PR merged, not *what* changed) do the rest.
+#
+# This job used to live inside manifest-ingest.yml, triggered by that
+# workflow's own `pull_request: types: [..., labeled]`. Moved out to its
+# own `pull_request_target`-triggered workflow 2026-08-10 after
+# confirming labeling a real, already-merged PR routinely produced
+# either a stale run or *no run at all* -- not just for old PRs, but for
+# same-day ones too. Root cause: `pull_request`-triggered runs resolve
+# the workflow YAML from the PR's own head commit/branch, not `main`.
+# This repo's manifest PR branches are typically short-lived and get
+# deleted right after merge, and this job itself was edited seven times
+# in one day (2026-08-10) -- so almost every real PR's own snapshot was
+# either missing the `labeled` type entirely, still carrying the
+# `paths:` filter that silently blocks `labeled` events (see the removed
+# filter's history in manifest-ingest.yml), or just plain unreachable
+# once its branch was gone. Confirmed directly: relabeling PR #100 (head
+# branch already deleted) produced zero workflow runs at all, not a
+# stale one. `pull_request_target` always resolves its workflow YAML
+# from the *base* repository's default branch (`main`), completely
+# independent of the labeled PR's own head branch/commit/history -- so
+# this job now always runs whatever is currently on `main`, regardless
+# of how old or freshly-merged the labeled PR is.
+#
+# Safe to use here despite `pull_request_target`'s usual fork-PR caveat
+# (elevated permissions + repo secrets available even for a fork's PR):
+# this job never checks out or executes anything from the labeled PR's
+# head ref. It only reads *which file* that PR touched via the read-only
+# Pulls Files API (metadata, not code), then checks out `main` itself
+# (actions/checkout@v4's default ref for pull_request_target is already
+# the base ref) and re-touches a manifest.yaml line there. There is no
+# path from an attacker-controlled PR body/diff into anything executed
+# here. Labeling itself also requires triage/write access on this repo
+# by GitHub's own permission model, so in practice this only ever fires
+# for a maintainer or the `pointcloud-org` bot regardless.
+#
+# Gated on `pull_request.merged == true` -- applying this label to a
+# still-open PR wouldn't make sense (just push more commits to that same
+# PR instead), and to a closed-but-unmerged one even less so (nothing
+# was ever ingested from it).
+name: Reingest
+
+on:
+  pull_request_target:
+    types: [labeled]
+    branches: [main]
+
+jobs:
+  reingest:
+    if: github.event.action == 'labeled' && github.event.label.name == 'reingest' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      # Uses the dedicated `pointcloud-org` bot account's PAT (the same
+      # INFRA_DISPATCH_TOKEN secret manifest-ingest.yml uses elsewhere
+      # for cross-repo dispatch calls -- Howard set it up as a real,
+      # purpose-built GitHub account rather than a personal PAT) instead
+      # of the default GITHUB_TOKEN. A PR opened via the default token is
+      # authored by github-actions[bot], which GitHub's 2026-06 bot-PR
+      # approval gate always flags "action_required" with zero jobs run
+      # on that PR's own pull_request:opened event, needing a different
+      # actor to click "Approve and run workflows" every time --
+      # confirmed via the actions/permissions/fork-pr-contributor-
+      # approval API that no approval-policy tier exempts bot-authored
+      # PRs, and confirmed the Copilot-specific "Require approval for
+      # workflow runs" toggle doesn't cover this either (it's scoped to
+      # Copilot's own pushes, a separate mechanism). PRs authored by a
+      # real account never hit this gate at all. Needs Contents + Pull
+      # requests + Issues all "Read and write" on this repo (Issues is
+      # for the final label-removal step) for the `pointcloud-org`
+      # account itself.
+      GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Point git push at the same token gh CLI is using
+        run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+      - name: Determine which dataset the original PR touched
+        id: dataset
+        run: |
+          FILE=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate \
+            --jq '.[] | select(.filename | test("^manifests/.*/manifest\\.yaml$")) | select(.status != "removed") | .filename' \
+            | head -n1)
+          if [ -z "$FILE" ]; then
+            echo "::error::could not find a manifests/**/manifest.yaml touched by PR #${{ github.event.pull_request.number }} -- nothing to reingest"
+            exit 1
+          fi
+          if [ ! -f "$FILE" ]; then
+            echo "::error::$FILE no longer exists on main (dataset removed since that PR) -- nothing to reingest"
+            exit 1
+          fi
+          echo "manifest_path=$FILE" >> "$GITHUB_OUTPUT"
+          echo "dataset_id=$(basename "$(dirname "$FILE")")" >> "$GITHUB_OUTPUT"
+      - name: Announce the reingest before doing it
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "🔄 Reingesting \`${{ steps.dataset.outputs.manifest_path }}\` (dataset \`${{ steps.dataset.outputs.dataset_id }}\`) from this PR, requested by @${{ github.event.sender.login }} via the \`reingest\` label..."
+      - name: Re-touch manifest and open a reingest PR
+        id: reingest
+        run: |
+          set -e
+          FILE="${{ steps.dataset.outputs.manifest_path }}"
+          DATASET_ID="${{ steps.dataset.outputs.dataset_id }}"
+          BRANCH="reingest-${DATASET_ID}-$(date -u +%Y%m%d%H%M%S)"
+          git config user.name "pointcloud-org"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          echo "# reingest requested via #${{ github.event.pull_request.number }} by @${{ github.event.sender.login }} on $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$FILE"
+          git add "$FILE"
+          git commit -m "Reingest ${DATASET_ID} (requested via #${{ github.event.pull_request.number }})"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "Reingest ${DATASET_ID}" \
+            --body "Triggered by applying the \`reingest\` label to #${{ github.event.pull_request.number }} -- no content change, just a re-touch of \`${FILE}\` to re-run ingest for \`${DATASET_ID}\`." \
+            --base main --head "$BRANCH")
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          # Merge immediately rather than `gh pr merge --auto`: this repo
+          # has no branch protection on main and no required status
+          # checks (confirmed 2026-08-10 -- GET .../branches/main/protection
+          # 404s), so there is nothing an --auto merge would actually be
+          # waiting on. --auto instead depends on the repo's own "Allow
+          # auto-merge" setting, which is off here -- that made `gh pr
+          # merge --auto` a silent no-op, so applying the `reingest` label
+          # opened a PR that just sat there until someone merged it by
+          # hand, instead of actually firing a reingest. A direct
+          # `gh pr merge --squash` has the same fallback (a merge conflict
+          # or a future branch-protection rule would make this fail
+          # loudly instead of silently) but actually completes the
+          # reingest end-to-end when nothing is blocking it, which today
+          # is always.
+          # GitHub computes a PR's mergeable state asynchronously right
+          # after creation, so a merge attempted immediately can
+          # transiently fail with "Pull request is not mergeable" even
+          # though nothing is actually blocking it -- retry briefly
+          # before giving up and falling back to a warning.
+          merged=false
+          for attempt in 1 2 3 4 5 6; do
+            if gh pr merge --squash "$PR_URL"; then
+              merged=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$merged" != "true" ]; then
+            echo "::warning::could not merge $PR_URL after retrying -- merge it manually to complete the reingest"
+          fi
+      - name: Comment on the original PR
+        if: always() && steps.reingest.outputs.pr_url != ''
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "🔄 Reingest requested by @${{ github.event.sender.login }} via the \`reingest\` label -- opened ${{ steps.reingest.outputs.pr_url }} to re-run ingest for \`${{ steps.dataset.outputs.dataset_id }}\`."
+      - name: Remove the reingest label so it can be reapplied later
+        if: always()
+        run: |
+          gh api -X DELETE "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/reingest" || true
