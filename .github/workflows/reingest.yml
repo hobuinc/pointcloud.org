@@ -127,43 +127,32 @@ jobs:
             --title "Reingest ${DATASET_ID}" \
             --body "Triggered by applying the \`reingest\` label to #${{ github.event.pull_request.number }} -- no content change, just a re-touch of \`${FILE}\` to re-run ingest for \`${DATASET_ID}\`.
 
-          You'll see **two** \`Manifest ingest\` runs on this PR in the Actions tab, seconds apart -- that's expected, not a duplicate ingest. This PR gets opened and merged automatically back to back, so the normal open-event dry-run preflight and the merge-event real ingest trigger both fire almost immediately: same two-run lifecycle every manifest PR has, just compressed in time instead of spread across a human review." \
+          **This PR needs an admin to merge it.** Nothing is re-ingested until it lands -- merging is what fires the real ingest, and the checks on this PR (schema validation, reachability, preflight) are the gate. Review them, then squash-merge." \
             --base main --head "$BRANCH")
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-          # Merge immediately rather than `gh pr merge --auto`: this repo
-          # has no branch protection on main and no required status
-          # checks (confirmed 2026-08-10 -- GET .../branches/main/protection
-          # 404s), so there is nothing an --auto merge would actually be
-          # waiting on. --auto instead depends on the repo's own "Allow
-          # auto-merge" setting, which is off here -- that made `gh pr
-          # merge --auto` a silent no-op, so applying the `reingest` label
-          # opened a PR that just sat there until someone merged it by
-          # hand, instead of actually firing a reingest. A direct
-          # `gh pr merge --squash` has the same fallback (a merge conflict
-          # or a future branch-protection rule would make this fail
-          # loudly instead of silently) but actually completes the
-          # reingest end-to-end when nothing is blocking it, which today
-          # is always.
-          # GitHub computes a PR's mergeable state asynchronously right
-          # after creation, so a merge attempted immediately can
-          # transiently fail with "Pull request is not mergeable" even
-          # though nothing is actually blocking it -- retry briefly
-          # before giving up and falling back to a warning.
-          merged=false
-          for attempt in 1 2 3 4 5 6; do
-            if gh pr merge --squash "$PR_URL"; then
-              merged=true
-              break
-            fi
-            sleep 5
-          done
-          if [ "$merged" != "true" ]; then
-            echo "::warning::could not merge $PR_URL after retrying -- merge it manually to complete the reingest"
-          fi
+          # Deliberately NOT merged here. This job used to merge its own
+          # PR immediately (via `gh pr merge --squash` in a retry loop),
+          # which meant a reingest was applied without anything having
+          # verified the resulting PR -- the retry loop existed to work
+          # around GitHub's async mergeability computation, not to wait
+          # for CI, so the PR's own validate/preflight checks were never
+          # a gate.
+          #
+          # That made the safety property accidental rather than
+          # designed: it only held because a re-touch appends a comment
+          # line to a manifest that already passed. conda-forge gates its
+          # automerge on all statuses passing for exactly this reason.
+          #
+          # An admin now reviews and merges the PR, at which point the
+          # normal merge-triggered dispatch-ingest runs. The PR carries
+          # the `reingest` label so it's easy to find.
+          gh pr edit "$PR_URL" --add-label reingest || true
       - name: Comment on the original PR
         if: always() && steps.reingest.outputs.pr_url != ''
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "🔄 Reingest requested by @${{ github.event.sender.login }} via the \`reingest\` label -- opened ${{ steps.reingest.outputs.pr_url }} to re-run ingest for \`${{ steps.dataset.outputs.dataset_id }}\`."
+          gh pr comment ${{ github.event.pull_request.number }} --body "🔄 Reingest requested by @${{ github.event.sender.login }} via the \`reingest\` label -- opened ${{ steps.reingest.outputs.pr_url }} for \`${{ steps.dataset.outputs.dataset_id }}\`.
+
+          **An admin needs to merge that PR** to actually re-run the ingest; its own checks are the gate."
       - name: Remove the reingest label so it can be reapplied later
         if: always()
         run: |

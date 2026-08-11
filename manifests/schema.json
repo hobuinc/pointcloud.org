@@ -53,7 +53,9 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["id"],
+          "required": [
+            "id"
+          ],
           "properties": {
             "id": {
               "type": "string",
@@ -88,10 +90,14 @@
         "properties": {
           "pointcloud_org": {
             "type": "object",
-            "required": ["contact"]
+            "required": [
+              "contact"
+            ]
           }
         },
-        "required": ["pointcloud_org"]
+        "required": [
+          "pointcloud_org"
+        ]
       },
       "description": "STAC Collection provider objects -- flat {name, description, roles, url}, not schema_version 1's nested {organization: {name}}. At least one entry must carry a pointcloud_org.contact (used for ingest-failure notification emails) -- enforced here via 'contains'."
     },
@@ -102,7 +108,9 @@
         "temporal": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["interval"],
+          "required": [
+            "interval"
+          ],
           "properties": {
             "interval": {
               "type": "array",
@@ -112,7 +120,14 @@
                 "minItems": 2,
                 "maxItems": 2,
                 "items": {
-                  "oneOf": [{ "type": "string" }, { "type": "null" }]
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               }
             }
@@ -137,7 +152,9 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["citation"],
+        "required": [
+          "citation"
+        ],
         "properties": {
           "doi": {
             "type": "string",
@@ -156,12 +173,23 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["rel", "href"],
+        "required": [
+          "rel",
+          "href"
+        ],
         "properties": {
-          "rel": { "type": "string" },
-          "href": { "type": "string" },
-          "type": { "type": "string" },
-          "title": { "type": "string" }
+          "rel": {
+            "type": "string"
+          },
+          "href": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
         }
       },
       "description": "STAC Link objects."
@@ -172,18 +200,26 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["href"],
+        "required": [
+          "href"
+        ],
         "properties": {
           "href": {
             "type": "string",
             "minLength": 1,
             "description": "Same href convention as an item's asset href below -- our own bucket, a foreign s3:// bucket (falls back to default_endpoint), or a bare https:// URL."
           },
-          "type": { "type": "string" },
-          "title": { "type": "string" },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
           "roles": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -219,31 +255,158 @@
   },
   "oneOf": [
     {
-      "required": ["items"],
-      "not": { "anyOf": [{ "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }, { "required": ["ept_source"] }] }
+      "required": [
+        "items"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "items_dir"
+            ]
+          },
+          {
+            "required": [
+              "stac_item"
+            ]
+          },
+          {
+            "required": [
+              "external_source"
+            ]
+          },
+          {
+            "required": [
+              "ept_source"
+            ]
+          }
+        ]
+      }
     },
     {
-      "required": ["items_dir"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }, { "required": ["ept_source"] }] }
+      "required": [
+        "items_dir"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "items"
+            ]
+          },
+          {
+            "required": [
+              "stac_item"
+            ]
+          },
+          {
+            "required": [
+              "external_source"
+            ]
+          },
+          {
+            "required": [
+              "ept_source"
+            ]
+          }
+        ]
+      }
     },
     {
-      "required": ["stac_item"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["external_source"] }, { "required": ["ept_source"] }] }
+      "required": [
+        "stac_item"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "items"
+            ]
+          },
+          {
+            "required": [
+              "items_dir"
+            ]
+          },
+          {
+            "required": [
+              "external_source"
+            ]
+          },
+          {
+            "required": [
+              "ept_source"
+            ]
+          }
+        ]
+      }
     },
     {
-      "required": ["external_source"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["ept_source"] }] }
+      "required": [
+        "external_source"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "items"
+            ]
+          },
+          {
+            "required": [
+              "items_dir"
+            ]
+          },
+          {
+            "required": [
+              "stac_item"
+            ]
+          },
+          {
+            "required": [
+              "ept_source"
+            ]
+          }
+        ]
+      }
     },
     {
-      "required": ["ept_source"],
-      "not": { "anyOf": [{ "required": ["items"] }, { "required": ["items_dir"] }, { "required": ["stac_item"] }, { "required": ["external_source"] }] }
+      "required": [
+        "ept_source"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "items"
+            ]
+          },
+          {
+            "required": [
+              "items_dir"
+            ]
+          },
+          {
+            "required": [
+              "stac_item"
+            ]
+          },
+          {
+            "required": [
+              "external_source"
+            ]
+          }
+        ]
+      }
     }
   ],
   "definitions": {
     "provider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -257,7 +420,12 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["producer", "licensor", "processor", "host"]
+            "enum": [
+              "producer",
+              "licensor",
+              "processor",
+              "host"
+            ]
           },
           "description": "STAC provider roles -- see https://github.com/radiantearth/stac-spec/blob/master/collection-spec/collection-spec.md#provider-object."
         },
@@ -271,10 +439,25 @@
             "contact": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "email"],
+              "required": [
+                "name",
+                "email",
+                "github_owner"
+              ],
               "properties": {
-                "name": { "type": "string", "minLength": 1 },
-                "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" }
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "email": {
+                  "type": "string",
+                  "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+                },
+                "github_owner": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
+                  "description": "GitHub username (not a URL, not an email) of the account that maintains this dataset in this repository. Required so automation has a GitHub identity to @-mention -- the `email` above can't be used to ping anyone on a pull request or issue. Validated against GitHub's own username rules: 1-39 chars, alphanumeric or single hyphens, no leading/trailing hyphen."
+                }
               },
               "description": "The person who can actually update this dataset's manifest/URLs on this organization's behalf, if any -- gets emailed if ingest preflight fails. No STAC equivalent, hence nested under pointcloud_org rather than a plain provider field."
             }
@@ -285,7 +468,9 @@
     "pointcloudOrg": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["derivatives"],
+      "required": [
+        "derivatives"
+      ],
       "properties": {
         "derivatives": {
           "type": "boolean",
@@ -306,7 +491,9 @@
         "spatial_reference": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["id"],
+          "required": [
+            "id"
+          ],
           "properties": {
             "id": {
               "type": "string",
@@ -338,14 +525,18 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["href"],
+            "required": [
+              "href"
+            ],
             "properties": {
               "href": {
                 "type": "string",
                 "minLength": 1,
-                "description": "An absolute https:// URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml. Relative paths are resolved by the site build, never by the ingest backend."
+                "description": "An absolute https://\u00a0URL, OR a path relative to this manifest's own directory pointing at a file checked into the repo alongside manifest.yaml. Relative paths are resolved by the site build, never by the ingest backend."
               },
-              "title": { "type": "string" }
+              "title": {
+                "type": "string"
+              }
             }
           },
           "description": "Pointers to externally-hosted or locally-checked-in metadata about this dataset (flight reports, sensor/acquisition documentation, FGDC/ISO XML, etc.). Purely informational -- never processed by any ingest stage. Distinct from top-level `links`/STAC Link objects because of the relative-path resolution behavior above, which generic STAC links don't define."
@@ -354,8 +545,12 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "default_asset_id": { "type": "string" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "default_asset_id": {
+              "type": "string"
+            }
           }
         }
       }
@@ -363,7 +558,11 @@
     "item": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "assets", "pointcloud_org"],
+      "required": [
+        "id",
+        "assets",
+        "pointcloud_org"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -375,23 +574,32 @@
         "assets": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["data"],
+          "required": [
+            "data"
+          ],
           "properties": {
             "data": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["href", "roles"],
+              "required": [
+                "href",
+                "roles"
+              ],
               "properties": {
                 "href": {
                   "type": "string",
                   "minLength": 1,
                   "description": "\"s3://pointcloud/...\" (our own bucket), \"s3://<other-bucket>/...\" (foreign bucket, resolved via endpoint/default_endpoint), a bare https:// URL, or a GDAL VSI path (/vsicurl/, /vsis3/, etc.)."
                 },
-                "type": { "type": "string" },
+                "type": {
+                  "type": "string"
+                },
                 "roles": {
                   "type": "array",
                   "minItems": 1,
-                  "items": { "type": "string" }
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "endpoint": {
                   "type": "string",
@@ -405,7 +613,9 @@
         "pointcloud_org": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["copc_resolution"],
+          "required": [
+            "copc_resolution"
+          ],
           "properties": {
             "copc_resolution": {
               "type": "number",
@@ -418,7 +628,11 @@
     "itemsDir": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["href", "roles", "pointcloud_org"],
+      "required": [
+        "href",
+        "roles",
+        "pointcloud_org"
+      ],
       "properties": {
         "href": {
           "type": "string",
@@ -432,7 +646,9 @@
         "roles": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "endpoint": {
           "type": "string"
@@ -440,7 +656,9 @@
         "pointcloud_org": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["copc_resolution"],
+          "required": [
+            "copc_resolution"
+          ],
           "properties": {
             "copc_resolution": {
               "type": "number"
@@ -452,7 +670,9 @@
     "stacItemRef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["href"],
+      "required": [
+        "href"
+      ],
       "properties": {
         "href": {
           "type": "string",
@@ -474,7 +694,9 @@
     "externalSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["href"],
+      "required": [
+        "href"
+      ],
       "properties": {
         "href": {
           "type": "string",
@@ -490,7 +712,9 @@
     "eptSourceRef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["href"],
+      "required": [
+        "href"
+      ],
       "properties": {
         "href": {
           "type": "string",
@@ -522,15 +746,25 @@
           "type": "number",
           "description": "GSD in meters for all derivative rasters. Falls back to each item's pointcloud_org.copc_resolution when omitted."
         },
-        "dtm": { "$ref": "#/definitions/derivativeRaster" },
-        "dsm": { "$ref": "#/definitions/derivativeRaster" },
+        "dtm": {
+          "$ref": "#/definitions/derivativeRaster"
+        },
+        "dsm": {
+          "$ref": "#/definitions/derivativeRaster"
+        },
         "ambient_occlusion": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "whitebox_tool": { "type": "string" },
-            "whitebox_params": { "type": "object" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "whitebox_tool": {
+              "type": "string"
+            },
+            "whitebox_params": {
+              "type": "object"
+            }
           }
         }
       }
@@ -539,10 +773,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
+        "enabled": {
+          "type": "boolean"
+        },
         "pdal_filters": {
           "type": "array",
-          "items": { "$ref": "#/definitions/pdalFilterStage" },
+          "items": {
+            "$ref": "#/definitions/pdalFilterStage"
+          },
           "description": "Inline filter stages. Mutually exclusive with pdal_filters_file. Replaces the engine's default pipeline entirely when given -- no 'append to defaults' mode."
         },
         "pdal_filters_file": {
@@ -552,14 +790,29 @@
         }
       },
       "not": {
-        "allOf": [{ "required": ["pdal_filters"] }, { "required": ["pdal_filters_file"] }]
+        "allOf": [
+          {
+            "required": [
+              "pdal_filters"
+            ]
+          },
+          {
+            "required": [
+              "pdal_filters_file"
+            ]
+          }
+        ]
       }
     },
     "pdalFilterStage": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "type": "string" }
+        "type": {
+          "type": "string"
+        }
       },
       "description": "{\"type\": \"filters.range\", ...} etc, as PDAL itself expects. Not validated further -- passed through to the Container verbatim."
     }

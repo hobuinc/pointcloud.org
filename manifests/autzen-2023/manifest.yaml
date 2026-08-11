@@ -33,6 +33,7 @@ providers:
       contact:
         name: Howard Butler
         email: howard@hobu.co
+        github_owner: hobu
 links:
   - rel: about
     href: https://github.com/PDAL/data/tree/main/autzen/2023

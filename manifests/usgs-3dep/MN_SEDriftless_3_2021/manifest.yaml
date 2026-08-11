@@ -39,6 +39,7 @@ providers:
       contact:
         name: Howard Butler
         email: howard@hobu.co
+        github_owner: hobu
 links:
   - rel: about
     href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/MN_SE_Driftless_2021_B21/MN_SEDriftless_3_2021/reports/USGS_MN_SEDriftless_3_2021_Summary_Report.pdf

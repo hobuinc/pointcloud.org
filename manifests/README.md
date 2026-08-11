@@ -124,6 +124,7 @@ providers:                  # at least one; at least one needs a contact
       contact:               # who gets emailed if ingest preflight fails
         name: Jane Doe
         email: jane@example.org
+        github_owner: janedoe   # required: GitHub username, so automation can @-mention you
 
 pointcloud_org:
   derivatives: true          # generate DTM/DSM/ambient-occlusion COGs?

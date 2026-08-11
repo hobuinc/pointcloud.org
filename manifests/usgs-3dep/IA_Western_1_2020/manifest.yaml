@@ -35,6 +35,7 @@ providers:
       contact:
         name: Howard Butler
         email: howard@hobu.co
+        github_owner: hobu
 links:
   - rel: about
     href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IA_WesternIA_2020_D21/IA_Western_1_2020/reports/USGS_IA_Western_1_2020_Summary_Report.pdf

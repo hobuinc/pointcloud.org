@@ -26,6 +26,7 @@ providers:
       contact:
         name: Howard Butler
         email: howard@hobu.co
+        github_owner: hobu
   - name: PDAL
     roles: [host]
     url: https://github.com/PDAL/data

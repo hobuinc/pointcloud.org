@@ -17,6 +17,7 @@ providers:
     contact:
       name: Howard Butler
       email: howard@hobu.co
+      github_owner: hobu
 pointcloud_org:
   derivatives: true
   # Every asset below lives in our own Cloudflare R2 bucket, but this

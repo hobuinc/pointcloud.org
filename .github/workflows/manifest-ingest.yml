@@ -66,6 +66,7 @@ jobs:
       manifest_files: ${{ steps.changed.outputs.manifest_files }}
       removed_dataset_ids: ${{ steps.changed.outputs.removed_dataset_ids }}
       too_many_datasets: ${{ steps.changed.outputs.too_many_datasets }}
+      migration: ${{ steps.changed.outputs.migration }}
     steps:
       - name: Determine which dataset directories this PR changed
         id: changed
@@ -138,6 +139,34 @@ jobs:
             const totalTouched = new Set([...datasetIds, ...removedDatasetIds]).size;
             core.setOutput("too_many_datasets", totalTouched > 1 ? "true" : "false");
 
+            // A MIGRATION is a deliberate fleet-wide change -- a schema
+            // field becoming required, a link structure changing, a
+            // convention being applied across the archive. It inherently
+            // touches every dataset at once, which is exactly what
+            // one-dataset-per-PR exists to prevent for *contributions*.
+            //
+            // conda-forge treats migrations as their own class of change
+            // for this reason. Signalled by a `[migration]` marker in the
+            // PR title rather than a label, because a title is evaluated
+            // on the ordinary opened/synchronize events -- a label would
+            // need `labeled` back in this workflow's `types:`, which is
+            // the thing that caused the stale-workflow-file mess (see
+            // reingest.yml's header) and would re-trigger it here.
+            //
+            // Titles are only settable by someone who can open or edit
+            // the PR, so this is not an authorization boundary: it makes
+            // multi-dataset PRs *possible*, and the reviewer merging it
+            // is the actual gate. Every other check still runs.
+            const title = context.payload.pull_request.title || "";
+            const isMigration = /\[migration\]/i.test(title);
+            core.setOutput("migration", isMigration ? "true" : "false");
+            if (isMigration) {
+              core.notice(
+                `PR title contains [migration] -- the one-dataset-per-PR rule is relaxed and ` +
+                  `validation runs against every manifest in the repo instead of just the changed one.`,
+              );
+            }
+
   # A PR that touches more than one dataset directory gets rejected
   # outright -- one PR, one dataset, so review/preflight/ingest stay
   # scoped to a single change a maintainer can reason about (and so a
@@ -149,7 +178,7 @@ jobs:
   # if `validate` also happens to run against the same file list.
   reject-multi-dataset-pr:
     needs: changed
-    if: github.event.action != 'closed' && needs.changed.outputs.too_many_datasets == 'true'
+    if: github.event.action != 'closed' && needs.changed.outputs.too_many_datasets == 'true' && needs.changed.outputs.migration != 'true'
     runs-on: ubuntu-latest
     # Explicit, in addition to (not instead of) `validate`'s own refusal
     # to run against multiple manifest paths (see
@@ -230,8 +259,19 @@ jobs:
           node-version: 24
       - name: Install dependencies (js-yaml, ajv, for the validator)
         run: npm install
+      # For a migration, pass no file list at all: validate-manifests.mjs
+      # falls back to validating EVERY manifest in the repo in that case
+      # (see its own doc comment), which is precisely what a fleet-wide
+      # change needs -- and it refuses to run against an explicit
+      # multi-dataset list, so passing the changed files would just fail.
       - name: Validate manifest(s)
-        run: node scripts/validate-manifests.mjs ${{ needs.changed.outputs.manifest_files }}
+        run: |
+          if [ "${{ needs.changed.outputs.migration }}" = "true" ]; then
+            echo "[migration] validating every manifest in the repo"
+            node scripts/validate-manifests.mjs
+          else
+            node scripts/validate-manifests.mjs ${{ needs.changed.outputs.manifest_files }}
+          fi
 
   # Foreign/https URL reachability + a resolved-payload-size estimate --
   # both need zero infrastructure credentials (a plain HEAD request, a
@@ -276,6 +316,16 @@ jobs:
       - name: Check dataset.federate
         id: check
         run: echo "federate=$(node scripts/check-federate.mjs ${{ needs.changed.outputs.manifest_files }})" >> "$GITHUB_OUTPUT"
+      # Hard gate, not advisory: `federate: true` is the one field that
+      # makes this project copy submitter-specified URLs into its own
+      # bucket and republish them under its own domain, so the files
+      # being copied have to be recognized point-cloud/raster formats.
+      # Fails the check (rather than warning) precisely because a PR that
+      # gets this wrong must not be mergeable. See the script's own doc
+      # comment for why this is extension-based and why ept_source is
+      # excluded.
+      - name: Enforce the federation format allowlist
+        run: node scripts/check-federate-extensions.mjs ${{ needs.changed.outputs.manifest_files }}
 
   # Dry-run counterpart to dispatch-ingest below -- fires on every push
   # to an open PR (not just merge), so a contributor gets real feedback

@@ -1,0 +1,114 @@
+# Scheduled upstream-drift sweep.
+#
+# pointcloud.org's archive is mostly *references to other people's data*
+# -- at time of writing 47 of 51 collections point at USGS-hosted EPT
+# endpoints that this project does not control. Those move: workunits get
+# republished under new names, buckets get reorganized, endpoints get
+# retired. Until now nothing noticed. A dataset could 404 for months and
+# the only way to find out was a user reporting a broken viewer.
+#
+# This is the local equivalent of conda-forge's autotick bot, which exists
+# for exactly this reason: upstream changes and the catalog has to follow.
+# (See CONDA-FORGE-GAP-ANALYSIS.md in the infrastructure repo, Gap 2.)
+#
+# Deliberately built on the same credential-free script that already
+# guards every PR (`scripts/check-reachability.mjs`), so the sweep checks
+# precisely what the pre-merge gate checks -- no second, drifting
+# implementation of "is this dataset still reachable".
+#
+# ## Reporting model
+#
+# One long-lived tracking issue, found by the `upstream-drift` label and
+# updated in place, rather than a new issue per run. A weekly cron that
+# opens a fresh issue every time produces noise nobody reads; a single
+# issue whose body is rewritten gives a current, at-a-glance answer and a
+# natural comment thread of state changes.
+#
+# The issue is closed automatically when a sweep passes cleanly, and
+# reopened when one fails, so "is anything broken upstream right now" is
+# answerable from whether that issue is open.
+#
+# Also pings each affected dataset's `github_owner` (from the manifest's
+# providers[].pointcloud_org.contact) so the person responsible hears
+# about it, rather than the report sitting in a queue only maintainers
+# read.
+name: Upstream drift sweep
+
+on:
+  schedule:
+    # 06:00 UTC on Mondays. Weekly is the right cadence for third-party
+    # data republication -- daily would mostly re-report the same
+    # breakage, and monthly is long enough that a broken dataset stays
+    # broken through a whole release cycle.
+    - cron: "0 6 * * 1"
+  # So a maintainer can force a sweep without waiting for Monday, and so
+  # `@pointcloud-org, please check-reachability` has an equivalent that
+  # produces the tracking issue rather than a one-off comment.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies (js-yaml)
+        run: npm install
+
+      - name: Sweep every dataset's external URLs
+        id: sweep
+        run: |
+          set +e
+          node scripts/upstream-drift-sweep.mjs > /tmp/report.md
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          echo "--- report ---"
+          cat /tmp/report.md
+
+      - name: Open, update, or close the tracking issue
+        run: |
+          set -e
+          LABEL=upstream-drift
+          # Auto-create the label on first run, same pattern the ingest
+          # workflow uses for `removal`/`federated`.
+          gh label create "$LABEL" --color "b60205" \
+            --description "Upstream data drift detected by the weekly sweep" 2>/dev/null || true
+
+          EXISTING=$(gh issue list --label "$LABEL" --state all --limit 1 --json number,state \
+            --jq '.[0] | "\(.number) \(.state)"' 2>/dev/null || echo "")
+          NUM=$(echo "$EXISTING" | awk '{print $1}')
+          STATE=$(echo "$EXISTING" | awk '{print $2}')
+
+          if [ "${{ steps.sweep.outputs.status }}" = "0" ]; then
+            # Clean sweep. Close the tracking issue if it was open, and
+            # say why -- a silently-closed issue is confusing.
+            if [ -n "$NUM" ] && [ "$STATE" = "OPEN" ]; then
+              gh issue comment "$NUM" --body "✅ Upstream sweep is clean as of $(date -u +%Y-%m-%dT%H:%MZ) — every external URL across the archive resolved. Closing; this will reopen automatically if a future sweep finds problems."
+              gh issue close "$NUM"
+            fi
+            echo "clean sweep -- nothing to report"
+            exit 0
+          fi
+
+          TITLE="Upstream data drift detected ($(date -u +%Y-%m-%d))"
+          if [ -n "$NUM" ]; then
+            gh issue edit "$NUM" --title "$TITLE" --body-file /tmp/report.md
+            if [ "$STATE" != "OPEN" ]; then
+              gh issue reopen "$NUM"
+              gh issue comment "$NUM" --body "Reopened: the $(date -u +%Y-%m-%d) sweep found upstream problems again. Details in the issue body above."
+            else
+              gh issue comment "$NUM" --body "🔁 Re-checked $(date -u +%Y-%m-%dT%H:%MZ); the issue body above has been updated with the current state."
+            fi
+            echo "updated tracking issue #$NUM"
+          else
+            gh issue create --title "$TITLE" --label "$LABEL" --body-file /tmp/report.md
+            echo "opened a new tracking issue"
+          fi
