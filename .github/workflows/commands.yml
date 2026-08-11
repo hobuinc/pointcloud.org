@@ -53,10 +53,31 @@ jobs:
   command:
     # Cheap pre-filter so the vast majority of comments never start a
     # runner. The real parse happens in the job.
+    #
+    # Two properties this filter MUST have, both learned by breaking them:
+    #
+    # 1. Never react to the bot's own comments. This workflow replies on
+    #    the same issue it was invoked from, and several of its replies
+    #    quote the command syntax (the help text lists every command), so
+    #    a naive filter makes the bot answer itself forever.
+    #
+    # 2. On an `issue_comment` event, look ONLY at the comment. The event
+    #    payload also carries `issue.body` -- the body of the issue the
+    #    comment is on -- so matching against it means every comment on
+    #    an issue whose body contains a command re-runs the command. That
+    #    is an infinite loop: bot comments -> issue_comment fires ->
+    #    issue.body still matches -> bot comments again. Observed live on
+    #    issue #137, five runs deep before it was cancelled.
     if: |
-      contains(github.event.comment.body, '@pointcloud-org, please') ||
-      contains(github.event.issue.body, '@pointcloud-org, please') ||
-      contains(github.event.issue.title, '@pointcloud-org, please')
+      github.event.sender.login != 'pointcloud-org' &&
+      github.event.sender.login != 'github-actions[bot]' &&
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@pointcloud-org, please')) ||
+        (github.event_name == 'issues' && (
+          contains(github.event.issue.body, '@pointcloud-org, please') ||
+          contains(github.event.issue.title, '@pointcloud-org, please')
+        ))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,9 +131,14 @@ jobs:
           # Via env, never interpolated into the script body -- a comment
           # is attacker-controlled text and `${{ }}` interpolation would
           # splice it straight into bash.
-          COMMENT_BODY: ${{ github.event.comment.body }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
+          #
+          # Scoped by event type for the same reason as the job-level
+          # `if:` above: on a comment event the issue body is NOT part of
+          # the command, or every later comment re-runs whatever the issue
+          # body asked for.
+          COMMENT_BODY: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
+          ISSUE_BODY: ${{ github.event_name == 'issues' && github.event.issue.body || '' }}
+          ISSUE_TITLE: ${{ github.event_name == 'issues' && github.event.issue.title || '' }}
         run: |
           TEXT="$COMMENT_BODY
           $ISSUE_BODY
@@ -136,11 +162,18 @@ jobs:
           echo "Parsed verb='$VERB' arg='$ARG'"
 
           if [ -z "$VERB" ]; then
+            # NOTE the zero-width space after "@pointcloud-org" in each
+            # example below. The help text has to *show* the command
+            # syntax, but a bot comment containing the literal trigger
+            # phrase would match this workflow's own filter and start a
+            # loop. The examples stay copy-pasteable (the ZWSP is dropped
+            # by the parser's whitespace handling) without being
+            # self-triggering.
             gh issue comment "$ISSUE_NUMBER" --body "I couldn't tell which command you meant. Supported commands:
 
-          - \`@pointcloud-org, please reingest <DATASET_ID>\` — re-run ingest for one dataset. Opens a pull request for an admin to merge; the ingest happens on merge.
-          - \`@pointcloud-org, please refresh-stac\` — rebuild the archive-wide STAC catalog, collections manifest, and the single-file \`items.parquet\`.
-          - \`@pointcloud-org, please check-reachability\` — check every dataset's external URLs and report anything unreachable.
+          - \`@pointcloud-org​, please reingest <DATASET_ID>\` — re-run ingest for one dataset. Opens a pull request for an admin to merge; the ingest happens on merge.
+          - \`@pointcloud-org​, please refresh-stac\` — rebuild the archive-wide STAC catalog, collections manifest, and the single-file \`items.parquet\`.
+          - \`@pointcloud-org​, please check-reachability\` — check every dataset's external URLs and report anything unreachable.
 
           Dataset ids are directory names under \`manifests/\` (for grouped datasets, just the leaf, e.g. \`MN_SEDriftless_3_2021\`)."
           fi
