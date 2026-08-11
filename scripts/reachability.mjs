@@ -362,12 +362,6 @@ if (mode === "report") {
     process.exit(0);
   }
 
-  const owners = [...new Set(brokenIds.map((id) => byId.get(id)?.owner).filter(Boolean))];
-  if (owners.length > 0) {
-    lines.push(`Maintainers of affected datasets: ${owners.map((o) => `@${o}`).join(", ")}`);
-    lines.push("");
-  }
-
   lines.push("| Dataset | Reachability | Manifest | Maintainer | Failing |");
   lines.push("| --- | :---: | --- | --- | --- |");
   for (const id of brokenIds.slice(0, MAX_ROWS)) {
@@ -391,6 +385,59 @@ if (mode === "report") {
     lines.push("");
     lines.push(`_…and ${brokenIds.length - MAX_ROWS} more, omitted to stay under GitHub's issue-body size limit._`);
   }
+
+  // ---- Notifications ----
+  //
+  // Grouped BY OWNER, not one line per dataset. GitHub notifies a user
+  // once per comment however many times they're mentioned, so a
+  // per-dataset list would be pure noise -- and at this scale one owner
+  // can plausibly own hundreds of broken datasets at once (an entire
+  // USGS bucket reorganizing would do it).
+  //
+  // Placed below the table on purpose: the table is what a maintainer
+  // scans, the mentions are what reaches whoever has to act.
+  lines.push("");
+  lines.push("### Notifications");
+  lines.push("");
+
+  const byOwner = new Map();
+  const unowned = [];
+  for (const id of brokenIds) {
+    const owner = byId.get(id)?.owner;
+    if (!owner) {
+      unowned.push(id);
+      continue;
+    }
+    if (!byOwner.has(owner)) byOwner.set(owner, []);
+    byOwner.get(owner).push(id);
+  }
+
+  if (byOwner.size === 0 && unowned.length === 0) {
+    lines.push("_No maintainers to notify._");
+  }
+
+  // Most-affected owner first, so the person with the biggest problem
+  // reads their name at the top rather than hunting for it.
+  const sortedOwners = [...byOwner.entries()].sort((a, b) => b[1].length - a[1].length);
+  for (const [owner, ids] of sortedOwners) {
+    // Cap the inline list; the table above is the authoritative detail,
+    // and 200 backticked ids in one bullet is unreadable.
+    const shown = ids.slice(0, 10).map((id) => `\`${id}\``).join(", ");
+    const more = ids.length > 10 ? `, and ${ids.length - 10} more` : "";
+    const noun = ids.length === 1 ? "dataset" : "datasets";
+    lines.push(`- @${owner} — ${ids.length} unreachable ${noun}: ${shown}${more}`);
+  }
+
+  if (unowned.length > 0) {
+    const shown = unowned.slice(0, 10).map((id) => `\`${id}\``).join(", ");
+    const more = unowned.length > 10 ? `, and ${unowned.length - 10} more` : "";
+    lines.push(
+      `- ⚠️ **No maintainer recorded** for ${unowned.length} unreachable dataset(s): ${shown}${more}. ` +
+        `Add a \`github_owner\` to the manifest's \`providers[].pointcloud_org.contact\` so future reports can ` +
+        `notify someone.`,
+    );
+  }
+
   lines.push("");
   lines.push("**What to do about it**");
   lines.push("");
