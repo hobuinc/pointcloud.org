@@ -34,6 +34,36 @@ const CONCURRENCY = 8;
 /** Per-request timeout. USGS endpoints are occasionally slow rather than dead, and a false "broken" report is worse than a slow sweep. */
 const TIMEOUT_MS = 20_000;
 
+/**
+ * Where the human-facing dataset pages live. Every dataset resolves at
+ * `<SITE>/datasets/<id>/` -- flat, using the leaf id even for datasets
+ * nested under a grouping directory (confirmed live: usgs-3dep's
+ * MN_SEDriftless_3_2021 serves at /datasets/MN_SEDriftless_3_2021/).
+ * That flatness is guaranteed by validate-manifests.mjs's global
+ * id-uniqueness check.
+ */
+const SITE_BASE_URL = process.env.SITE_BASE_URL ?? "https://pointcloud.org";
+
+/** `owner/repo`, for building manifest permalinks. */
+const REPO_SLUG = process.env.GITHUB_REPOSITORY ?? "hobuinc/pointcloud.org";
+
+/**
+ * Branch the manifest links should point at. Uses the ref the sweep is
+ * running on so a report generated from a branch links to that branch's
+ * manifests rather than silently to main -- GITHUB_REF_NAME is set by
+ * Actions for both workflow_dispatch and schedule.
+ */
+const REF_NAME = process.env.GITHUB_REF_NAME ?? "main";
+
+/**
+ * Cap on table rows. At the scale this is built for (1000s of datasets) a
+ * bad upstream day could break hundreds at once, and a GitHub issue body
+ * is limited to 65536 characters -- a report that exceeds it fails to
+ * post at all, which is strictly worse than a truncated one. The
+ * remainder is still counted in the summary line.
+ */
+const MAX_ROWS = 200;
+
 async function findManifests(dir) {
   const out = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -170,7 +200,7 @@ if (broken.length === 0) {
 lines.push(`⚠️ **${broken.length} of ${datasets.length} dataset(s) have upstream problems** as of ${stamp}.`);
 lines.push("");
 lines.push(
-  `This issue is maintained automatically by the [weekly upstream-drift sweep](../blob/main/.github/workflows/upstream-drift-sweep.yml) ` +
+  `This issue is maintained automatically by the [weekly upstream-drift sweep](https://github.com/${REPO_SLUG}/blob/${REF_NAME}/.github/workflows/upstream-drift-sweep.yml) ` +
     `and rewritten in place on every run. It closes itself when a sweep comes back clean.`,
 );
 lines.push("");
@@ -188,28 +218,45 @@ if (owners.length > 0) {
 lines.push("---");
 lines.push("");
 
-for (const d of broken) {
-  const failures = d.checks.filter((c) => !c.result.ok);
-  lines.push(`### \`${d.id}\``);
-  lines.push("");
-  lines.push(`- Manifest: [\`${d.file}\`](../blob/main/${d.file})`);
-  lines.push(`- Maintainer: ${d.owner ? `@${d.owner}` : "_none recorded (`github_owner` missing)_"}`);
+// A table, not a section per dataset. This report is built for an archive
+// of 1000s of datasets, where a section-per-failure report is unreadable
+// and unscannable -- one row per broken dataset, and *only* broken ones,
+// keeps "what needs attention right now" answerable at a glance.
+lines.push("| Dataset | Reachability | Manifest | Maintainer | Failing |");
+lines.push("| --- | :---: | --- | --- | --- |");
+
+const rows = broken.slice(0, MAX_ROWS);
+for (const d of rows) {
+  const datasetLink = `[\`${d.id}\`](${SITE_BASE_URL}/datasets/${encodeURIComponent(d.id)}/)`;
+  const manifestLink = `[\`${d.file}\`](https://github.com/${REPO_SLUG}/blob/${REF_NAME}/${d.file})`;
+  const maintainer = d.owner ? `@${d.owner}` : "_none_";
+
+  let detail;
   if (d.parseError) {
-    lines.push(`- ❌ Manifest failed to parse: \`${d.parseError}\``);
-    lines.push("");
-    continue;
+    detail = `manifest failed to parse`;
+  } else {
+    const failures = d.checks.filter((c) => !c.result.ok);
+    // Summarize rather than list: a dataset with 1,000 listed tiles can
+    // have 1,000 failing URLs, and that belongs nowhere near a table
+    // cell. One representative reason plus a count is what a maintainer
+    // needs to decide whether to look.
+    const first = failures[0];
+    const why = first.result.error ? first.result.error : `HTTP ${first.result.status}`;
+    const more = failures.length > 1 ? ` (+${failures.length - 1} more)` : "";
+    detail = `\`${first.label}\` → ${why}${more}`;
   }
-  lines.push(`- ${failures.length} of ${d.checks.length} checked URL(s) failing:`);
-  lines.push("");
-  for (const f of failures.slice(0, 20)) {
-    const why = f.result.error ? f.result.error : `HTTP ${f.result.status}`;
-    lines.push(`  - \`${f.label}\` → ${why}`);
-    lines.push(`    ${f.href}`);
-  }
-  if (failures.length > 20) lines.push(`  - …and ${failures.length - 20} more`);
-  lines.push("");
+  lines.push(`| ${datasetLink} | ❌ | ${manifestLink} | ${maintainer} | ${detail} |`);
 }
 
+if (broken.length > rows.length) {
+  lines.push("");
+  lines.push(
+    `_…and ${broken.length - rows.length} more broken dataset(s), omitted to stay under GitHub's ` +
+      `issue-body size limit. Re-run the sweep after fixing these to see the rest._`,
+  );
+}
+
+lines.push("");
 lines.push("---");
 lines.push("");
 lines.push("**What to do about it**");

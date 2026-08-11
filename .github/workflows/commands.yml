@@ -262,29 +262,29 @@ jobs:
       # so there's no reason to cross the trust boundary for it.
       - name: check-reachability
         if: steps.auth.outputs.unauthorized != 'true' && steps.parse.outputs.verb == 'check-reachability'
+        env:
+          # Manifest links in the report point at the ref the command ran
+          # on, and dataset links at the live site.
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.event.repository.default_branch }}
         run: |
           set +e
           npm install --no-audit --no-fund >/dev/null 2>&1
-          MANIFESTS=$(find manifests -name manifest.yaml | sort | tr '\n' ' ')
-          COUNT=$(echo "$MANIFESTS" | wc -w)
-          echo "Checking $COUNT manifest(s)..."
-          OUTPUT=$(node scripts/check-reachability.mjs $MANIFESTS 2>&1)
+          # Uses the sweep script, not check-reachability.mjs. The latter
+          # is the per-PR gate: it prints a line per URL, which is the
+          # right shape for one dataset in a pull request and completely
+          # unusable across an archive of 1000s -- the first version of
+          # this command dumped exactly that into a <details> block.
+          #
+          # The sweep script instead reports ONLY unreachable datasets, as
+          # a table, which is what makes this answerable at scale. Sharing
+          # it also means the on-demand command and the weekly sweep can
+          # never disagree about what "reachable" means.
+          node scripts/upstream-drift-sweep.mjs > /tmp/reach.md
           STATUS=$?
           set -e
-          {
-            if [ "$STATUS" -eq 0 ]; then
-              echo "✅ Reachability check passed — every external URL across all ${COUNT} dataset(s) resolved."
-            else
-              echo "⚠️ Reachability check found problems across ${COUNT} dataset(s)."
-            fi
-            echo ""
-            echo "<details><summary>Full output</summary>"
-            echo ""
-            echo '```'
-            echo "$OUTPUT" | tail -c 55000
-            echo '```'
-            echo ""
-            echo "</details>"
-          } > /tmp/reach.md
           gh issue comment "$ISSUE_NUMBER" --body-file /tmp/reach.md
+          # Surface a red X on the run itself when something is broken, so
+          # the Actions list reflects archive health rather than "the
+          # command executed successfully".
           exit "$STATUS"
