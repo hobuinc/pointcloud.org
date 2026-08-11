@@ -1,23 +1,117 @@
 schema_version: 2
 
-# Sourced via an Entwine EPT mirror (na-c.entwine.io/dk) per the ingest script (grab.sh) stored alongside the data -- original Danish national lidar provider not confirmed here.
-# TODO: confirm license before publishing -- not yet verified for this dataset.
+# A COPC clip of Kastellet, the star fort on Copenhagen's harbourfront,
+# cut from Denmark's national lidar elevation model, Danmarks Højdemodel
+# (DHM) -- specifically the DHM/Punktsky point-cloud product.
+#
+# Metadata below was established 2026-08-11 from the authoritative Danish
+# sources, replacing the previous scaffold which recorded only "an Entwine
+# EPT mirror (na-c.entwine.io/dk)" and `license: UNKNOWN`:
+#
+#   * DHM product specification v1.0.0 (2020-10-27) for the product
+#     definition, formats, reference systems, tiling, classification
+#     scheme and the accuracy/precision guarantees -- linked under
+#     metadata_links below
+#   * Klimadatastyrelsen's own terms page for the licence (see below)
+#
+# LICENCE, since this dataset previously carried an explicit "confirm
+# before publishing" TODO: Klimadatastyrelsen's terms for free geographic
+# data (dated 16.05.2024) name Danmarks Højdemodel (DHM) among the
+# datasets governed by CC BY 4.0, requiring that Klimadatastyrelsen be
+# credited. That is now recorded as a real SPDX identifier below, with the
+# attribution in `acknowledgement`.
+#
+# PRODUCING AGENCY, which has been renamed twice: the DHM specification
+# names the producer as the Danish Agency for Data Supply and Efficiency
+# (Styrelsen for Dataforsyning og Effektivisering, SDFE). SDFE has since
+# been reorganised, and this data is now published by Klimadatastyrelsen
+# (the Danish Climate Data Agency) via dataforsyningen.dk. Both are listed
+# under providers so the record matches whichever name a reader
+# encountered.
+#
+# WHAT IS DELIBERATELY NOT CLAIMED: the collection vintage of this
+# particular clip. DHM has nationwide collections from 2007 and 2014-15,
+# and since 2018 a rolling five-year cycle covering about a fifth of
+# Denmark each year, so "DHM/Punktsky" alone does not pin down a date. The
+# Entwine mirror this clip came from now returns HTTP 403, so the original
+# source metadata can no longer be inspected to settle it. Rather than
+# guess a year, no temporal extent is asserted -- and note the
+# specification only guarantees its accuracy figures for 2018-and-later
+# data, leaving pre-2018 accuracy explicitly unspecified.
 type: Collection
-stac_version: 1.0.0
+stac_version: "1.0.0"
 id: copenhagen-kastellet
 title: Copenhagen Kastellet
-description: "TODO: write a one-line summary for Copenhagen Kastellet"
-license: UNKNOWN
-keywords: [denmark, copenhagen]
+description: >
+  Classified airborne lidar point cloud of Kastellet in Copenhagen, one of
+  northern Europe's best-preserved star fortresses, clipped from Denmark's
+  national elevation model (Danmarks Højdemodel, DHM/Punktsky). The
+  pentagonal earthwork ramparts and surrounding moat are the point of
+  interest here: bastion fortification is geometry that reads far better in
+  a point cloud than on a map, and the ramparts survive largely intact from
+  the 17th century. Published as free public geodata by Klimadatastyrelsen
+  (formerly SDFE) via dataforsyningen.dk, and served here as a COPC clip
+  from pointcloud.org's own storage.
+license:
+  id: CC-BY-4.0
+  url: https://creativecommons.org/licenses/by/4.0/
+keywords:
+  - denmark
+  - copenhagen
+  - kastellet
+  - fortification
+  - dhm
+  - punktsky
+  - klimadatastyrelsen
+  - sdfe
+  - lidar
+  - copc
 providers:
-- name: "TODO: confirm organization name"
-  pointcloud_org:
-    contact:
-      name: Howard Butler
-      email: howard@hobu.co
-      github_owner: hobu
+  - name: Klimadatastyrelsen (Danish Climate Data Agency)
+    roles: [producer, licensor, host]
+    url: https://dataforsyningen.dk/
+  - name: Styrelsen for Dataforsyning og Effektivisering (SDFE, Danish Agency for Data Supply and Efficiency)
+    roles: [producer]
+    url: https://www.klimadatastyrelsen.dk/
+  - name: Hobu, Inc.
+    roles: [processor, host]
+    url: https://hobu.co
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+        github_owner: hobu
+links:
+  - rel: license
+    href: https://creativecommons.org/licenses/by/4.0/
+  - rel: about
+    href: https://dataforsyningen.dk/data/3931
+
 pointcloud_org:
   derivatives: true
+  # From the DHM product specification, section "Reference systems": the
+  # horizontal system for all DHM products is ETRS89 / UTM zone 32N
+  # (EPSG:25832) and the vertical system is DVR90 (EPSG:5799). The spec
+  # notes products may instead report the compound CRS EPSG:7416.
+  spatial_reference:
+    id: "EPSG:25832"
+    vertical_id: "EPSG:5799"
+    url: https://epsg.io/25832
+  # Required by CC BY 4.0, and named explicitly by Klimadatastyrelsen's
+  # own terms ("Du skal kreditere Klimadatastyrelsen på et passende sted").
+  acknowledgement: >
+    Contains data from Danmarks Højdemodel (DHM/Punktsky), © Klimadatastyrelsen,
+    licensed under CC BY 4.0. Originally produced by the Danish Agency for
+    Data Supply and Efficiency (SDFE).
+  metadata_links:
+    - title: DHM product specification v1.0.0 (PDF)
+      href: "https://dataforsyningen.dk/asset/PDF/produkt_dokumentation/dhm-prodspec-v1.0.0.pdf"
+    - title: Klimadatastyrelsen terms for free geographic data (CC BY 4.0)
+      href: "https://datafordeler.dk/vejledning/brugervilkaar/kds-geografiske-data/"
+    - title: DHM/Punktsky on Dataforsyningen
+      href: "https://dataforsyningen.dk/data/3931"
+    - title: Kortviseren shaded-relief viewer (Skyggekort)
+      href: "https://kortviseren.dk/side/skyggekort.html"
   # Every asset below lives in our own Cloudflare R2 bucket, but this
   # is declared explicitly (rather than inferred from the "pointcloud"
   # bucket name) so every dataset uniformly states which S3-compatible
@@ -31,10 +125,15 @@ pointcloud_org:
     default_asset_id: copenhagen-kastellet
 
 items:
-- id: copenhagen-kastellet
-  assets:
-    data:
-      href: s3://pointcloud/denmark/copenhagen-kastellet.copc.laz
-      roles: [data]
-  pointcloud_org:
-    copc_resolution: 1
+  - id: copenhagen-kastellet
+    assets:
+      data:
+        href: s3://pointcloud/denmark/copenhagen-kastellet.copc.laz
+        type: application/vnd.laszip+copc
+        roles: [data]
+    pointcloud_org:
+      # 1 metre, and unlike the US datasets in this archive that is
+      # genuinely metres: DHM is ETRS89/UTM32N throughout (see
+      # spatial_reference above), so there is no feet/metres ambiguity to
+      # reason about here.
+      copc_resolution: 1
