@@ -1,111 +1,175 @@
-<svg viewBox="0 0 980 620" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="ingest-flow-title ingest-flow-desc">
-  <title id="ingest-flow-title">How a manifest PR becomes real ingest</title>
-  <desc id="ingest-flow-desc">A contributor opens or updates a PR. This repo's own CI validates the manifest and checks foreign URL reachability, then dispatches a preflight to pointcloud.org's infrastructure, which checks file existence, CRS consistency, and PDAL filter validity, reporting results back as a sticky PR comment and commit statuses. If a PR touches more than one dataset it is rejected with a comment asking for separate PRs. Once every check is green and the PR merges, a real ingest dispatch fires, and a completion comment is posted once ingest finishes.</desc>
+<svg viewBox="0 0 980 610" xmlns="http://www.w3.org/2000/svg" font-family="Calibri, Carlito, 'Segoe UI', -apple-system, Helvetica, Arial, sans-serif" role="img" aria-labelledby="flow-title flow-desc">
+  <title id="flow-title">The nine steps a manifest takes, from pull request to published dataset</title>
+  <desc id="flow-desc">Steps 1 through 5 repeat on every push while the pull request is open: you open a PR touching one dataset directory; this repo's own CI validates the manifest against schema.json, checks that relative references exist, that a github_owner is present, and that only one dataset is touched; once validation passes, CI fires a preflight dispatch whose payload carries no secrets; pointcloud.org's infrastructure runs the checks that need storage access (do the referenced files exist, do items_dir tiles share a CRS, do the PDAL filters parse); results come back as an updating PR comment plus one pointcloud/* commit status per check, and if anything is red you push a fixup commit and the loop repeats. Steps 6 through 9 fire once, when a maintainer merges: the merge fires a single ingest dispatch; queues fan every asset out so PDAL can read each one's real metadata in a container; once every asset lands, one assembly step writes the dataset's STAC Collection, ItemCollection and GeoParquet, queues a hero image, and posts a completion comment back on the merged PR; then the site is rebuilt and the archive-wide catalog and collections list update, with the merged archive parquet following on the next scheduled pass.</desc>
+
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    <marker id="tip" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8FA3B8"/>
     </marker>
-    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#1f6feb"/>
+    <marker id="tipGold" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#E8A33D"/>
+    </marker>
+    <marker id="tipLoop" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5A6B7B"/>
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="980" height="620" fill="#ffffff"/>
+  <rect x="0" y="0" width="980" height="610" fill="#ffffff"/>
 
-  <!-- Title -->
-  <text x="490" y="30" text-anchor="middle" font-size="17" font-weight="600" fill="#1f2328">How a manifest PR becomes real ingest</text>
+  <!-- Heading -->
+  <text x="490" y="30" text-anchor="middle" font-size="18" font-weight="700" font-family="Cambria, Caladea, Georgia, serif" fill="#13315C">From pull request to published dataset</text>
+  <text x="490" y="50" text-anchor="middle" font-size="11.5" fill="#5A6B7B">Nine steps. You do the first one; a maintainer does the sixth. Everything else runs itself.</text>
 
-  <!-- Column headers -->
-  <text x="205" y="62" text-anchor="middle" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.5">CONTRIBUTOR</text>
-  <text x="490" y="62" text-anchor="middle" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.5">pointcloud.org (this repo)</text>
-  <text x="815" y="62" text-anchor="middle" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.5">pointcloud.org's infrastructure</text>
+  <!-- ============ PHASE A ============ -->
+  <rect x="10" y="66" width="960" height="24" rx="6" fill="#F1F5F9"/>
+  <text x="24" y="83" font-size="11" font-weight="700" fill="#13315C" letter-spacing="0.6">WHILE THE PULL REQUEST IS OPEN</text>
+  <text x="290" y="83" font-size="10.5" fill="#5A6B7B">every step below re-runs on every push — nothing is enqueued, nobody is emailed</text>
 
-  <!-- Lane separators -->
-  <line x1="345" y1="75" x2="345" y2="600" stroke="#d0d7de" stroke-width="1"/>
-  <line x1="655" y1="75" x2="655" y2="600" stroke="#d0d7de" stroke-width="1"/>
+  <!-- Step 1 -->
+  <rect x="10" y="102" width="176" height="158" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
+  <circle cx="34" cy="126" r="13" fill="#E8A33D"/>
+  <text x="34" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">1</text>
+  <rect x="104" y="115" width="70" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="139" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">YOU</text>
+  <text x="24" y="164" font-size="12.5" font-weight="700" fill="#13315C">Open a pull request</text>
+  <text x="24" y="186" font-size="10.5" fill="#5A6B7B">Add or edit exactly one</text>
+  <text x="24" y="200" font-size="10.5" fill="#5A6B7B">directory under manifests/,</text>
+  <text x="24" y="214" font-size="10.5" fill="#5A6B7B">holding one manifest.yaml</text>
+  <text x="24" y="228" font-size="10.5" fill="#5A6B7B">plus any companion files it</text>
+  <text x="24" y="242" font-size="10.5" fill="#5A6B7B">references.</text>
 
-  <!-- 1. Contributor opens/pushes PR -->
-  <rect x="95" y="85" width="220" height="60" rx="10" fill="#ddf4ff" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="205" y="108" text-anchor="middle" font-size="13" font-weight="600" fill="#0b3d91">Open PR / push a commit</text>
-  <text x="205" y="126" text-anchor="middle" font-size="11" fill="#0b3d91">editing manifests/&lt;id&gt;/manifest.yaml</text>
+  <!-- Step 2 -->
+  <rect x="206" y="102" width="176" height="158" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
+  <circle cx="230" cy="126" r="13" fill="#E8A33D"/>
+  <text x="230" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">2</text>
+  <rect x="284" y="115" width="86" height="17" rx="8.5" fill="#1C7293"/>
+  <text x="327" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">CI, IN THIS REPO</text>
+  <text x="220" y="164" font-size="12.5" font-weight="700" fill="#13315C">Checks that need no</text>
+  <text x="220" y="180" font-size="12.5" font-weight="700" fill="#13315C">credentials</text>
+  <text x="220" y="200" font-size="10.5" fill="#5A6B7B">schema.json shape · relative</text>
+  <text x="220" y="214" font-size="10.5" fill="#5A6B7B">references exist · a</text>
+  <text x="220" y="228" font-size="10.5" fill="#5A6B7B">github_owner is named ·</text>
+  <text x="220" y="242" font-size="10.5" fill="#5A6B7B">remote URLs are reachable</text>
 
-  <!-- 2. validate + check-reachability (parallel) -->
-  <rect x="380" y="85" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
-  <text x="490" y="107" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">validate</text>
-  <text x="490" y="124" text-anchor="middle" font-size="10.5" fill="#57606a">schema shape + local file refs</text>
+  <!-- Step 3 -->
+  <rect x="402" y="102" width="176" height="158" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
+  <circle cx="426" cy="126" r="13" fill="#E8A33D"/>
+  <text x="426" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">3</text>
+  <rect x="480" y="115" width="86" height="17" rx="8.5" fill="#1C7293"/>
+  <text x="523" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">CI, IN THIS REPO</text>
+  <text x="416" y="164" font-size="12.5" font-weight="700" fill="#13315C">Preflight dispatch</text>
+  <text x="416" y="186" font-size="10.5" fill="#5A6B7B">Once validation passes, a</text>
+  <text x="416" y="200" font-size="10.5" fill="#5A6B7B">generic “please check this</text>
+  <text x="416" y="214" font-size="10.5" fill="#5A6B7B">dataset” event fires, its</text>
+  <text x="416" y="228" font-size="10.5" fill="#5A6B7B">payload carrying no secrets</text>
+  <text x="416" y="242" font-size="10.5" fill="#5A6B7B">of any kind.</text>
 
-  <rect x="380" y="155" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
-  <text x="490" y="177" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">check-reachability</text>
-  <text x="490" y="194" text-anchor="middle" font-size="10.5" fill="#57606a">foreign/https URLs, payload size</text>
+  <!-- Step 4 -->
+  <rect x="598" y="102" width="176" height="158" rx="10" fill="#FFFBF3" stroke="#E8A33D" stroke-width="1.5"/>
+  <circle cx="622" cy="126" r="13" fill="#E8A33D"/>
+  <text x="622" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">4</text>
+  <rect x="668" y="115" width="94" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="715" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">INFRASTRUCTURE</text>
+  <text x="612" y="164" font-size="12.5" font-weight="700" fill="#13315C">The checks that need</text>
+  <text x="612" y="180" font-size="12.5" font-weight="700" fill="#13315C">storage access</text>
+  <text x="612" y="200" font-size="10.5" fill="#5A6B7B">Do the referenced files really</text>
+  <text x="612" y="214" font-size="10.5" fill="#5A6B7B">exist? Do items_dir tiles all</text>
+  <text x="612" y="228" font-size="10.5" fill="#5A6B7B">share one CRS? Do the PDAL</text>
+  <text x="612" y="242" font-size="10.5" fill="#5A6B7B">filters actually parse?</text>
 
-  <!-- guard: reject multi-dataset PR -->
-  <rect x="380" y="225" width="220" height="55" rx="10" fill="#fff1f0" stroke="#cf222e" stroke-width="1.25"/>
-  <text x="490" y="247" text-anchor="middle" font-size="12.5" font-weight="600" fill="#82071e">one-dataset-per-PR guard</text>
-  <text x="490" y="264" text-anchor="middle" font-size="10.5" fill="#82071e">fails + comments if &gt;1 dataset touched</text>
+  <!-- Step 5 -->
+  <rect x="794" y="102" width="176" height="158" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
+  <circle cx="818" cy="126" r="13" fill="#E8A33D"/>
+  <text x="818" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">5</text>
+  <rect x="864" y="115" width="94" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="911" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">INFRASTRUCTURE</text>
+  <text x="808" y="164" font-size="12.5" font-weight="700" fill="#13315C">Answers land on your</text>
+  <text x="808" y="180" font-size="12.5" font-weight="700" fill="#13315C">pull request</text>
+  <text x="808" y="200" font-size="10.5" fill="#5A6B7B">One comment that updates in</text>
+  <text x="808" y="214" font-size="10.5" fill="#5A6B7B">place, plus a pointcloud/*</text>
+  <text x="808" y="228" font-size="10.5" fill="#5A6B7B">commit status per check, so</text>
+  <text x="808" y="242" font-size="10.5" fill="#5A6B7B">you can see which one failed.</text>
 
-  <!-- 3. dispatch-preflight -->
-  <rect x="380" y="300" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
-  <text x="490" y="322" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">dispatch-preflight</text>
-  <text x="490" y="339" text-anchor="middle" font-size="10.5" fill="#57606a">fires on every push, no side effects</text>
+  <!-- Arrows across phase A -->
+  <path d="M188,181 L202,181" fill="none" stroke="#8FA3B8" stroke-width="1.5" marker-end="url(#tip)"/>
+  <path d="M384,181 L398,181" fill="none" stroke="#8FA3B8" stroke-width="1.5" marker-end="url(#tip)"/>
+  <path d="M580,181 L594,181" fill="none" stroke="#E8A33D" stroke-width="1.5" marker-end="url(#tipGold)"/>
+  <path d="M776,181 L790,181" fill="none" stroke="#E8A33D" stroke-width="1.5" marker-end="url(#tipGold)"/>
 
-  <!-- 4. infra: preflight checks -->
-  <rect x="705" y="300" width="220" height="70" rx="10" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
-  <text x="815" y="322" text-anchor="middle" font-size="12.5" font-weight="600" fill="#4d3800">Real preflight checks</text>
-  <text x="815" y="338" text-anchor="middle" font-size="10.5" fill="#4d3800">file existence, CRS consistency,</text>
-  <text x="815" y="352" text-anchor="middle" font-size="10.5" fill="#4d3800">pdal_filters validity</text>
+  <!-- Loop back: red? push a fixup commit -->
+  <path d="M882,262 L882,286 L98,286 L98,264" fill="none" stroke="#5A6B7B" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#tipLoop)"/>
+  <rect x="386" y="276" width="208" height="20" rx="10" fill="#ffffff"/>
+  <text x="490" y="290" text-anchor="middle" font-size="10.5" fill="#5A6B7B" font-style="italic">anything red? push a fixup commit</text>
 
-  <!-- comment back to PR -->
-  <rect x="95" y="300" width="220" height="70" rx="10" fill="#ddf4ff" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="205" y="322" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0b3d91">Sticky PR comment updates</text>
-  <text x="205" y="338" text-anchor="middle" font-size="10.5" fill="#0b3d91">+ pointcloud/* commit statuses</text>
-  <text x="205" y="352" text-anchor="middle" font-size="10.5" fill="#0b3d91">(pass or fail, in place)</text>
+  <!-- ============ PHASE B ============ -->
+  <rect x="10" y="312" width="960" height="24" rx="6" fill="#E7EEF5"/>
+  <text x="24" y="329" font-size="11" font-weight="700" fill="#13315C" letter-spacing="0.6">ONCE A MAINTAINER MERGES IT</text>
+  <text x="290" y="329" font-size="10.5" fill="#5A6B7B">fires exactly once — no human touches anything from here to publication</text>
 
-  <!-- loop-back: not green yet, push a fixup commit -->
-  <path d="M95,330 C40,330 40,115 95,115" fill="none" stroke="#57606a" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-  <text x="18" y="222" font-size="10.5" fill="#57606a" font-style="italic" transform="rotate(-90 18 222)" text-anchor="middle">not green? push a fixup commit</text>
+  <!-- Step 6 -->
+  <rect x="10" y="348" width="228" height="168" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
+  <circle cx="34" cy="372" r="13" fill="#E8A33D"/>
+  <text x="34" y="377" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">6</text>
+  <rect x="146" y="361" width="80" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="186" y="373" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">MAINTAINER</text>
+  <text x="24" y="410" font-size="12.5" font-weight="700" fill="#13315C">Merge</text>
+  <text x="24" y="432" font-size="10.5" fill="#5A6B7B">The merge itself is the trigger: it fires</text>
+  <text x="24" y="446" font-size="10.5" fill="#5A6B7B">a single ingest dispatch. Preflight</text>
+  <text x="24" y="460" font-size="10.5" fill="#5A6B7B">already told everyone what will</text>
+  <text x="24" y="474" font-size="10.5" fill="#5A6B7B">happen, so this is the first step with</text>
+  <text x="24" y="488" font-size="10.5" fill="#5A6B7B">side effects — and the only one that</text>
+  <text x="24" y="502" font-size="10.5" fill="#5A6B7B">needs a decision.</text>
 
-  <!-- 5. merge -->
-  <rect x="95" y="450" width="220" height="55" rx="10" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
-  <text x="205" y="472" text-anchor="middle" font-size="12.5" font-weight="600" fill="#116329">PR merged</text>
-  <text x="205" y="489" text-anchor="middle" font-size="10.5" fill="#116329">every check above is green</text>
+  <!-- Step 7 -->
+  <rect x="254" y="348" width="228" height="168" rx="10" fill="#FFFBF3" stroke="#E8A33D" stroke-width="1.5"/>
+  <circle cx="278" cy="372" r="13" fill="#E8A33D"/>
+  <text x="278" y="377" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">7</text>
+  <rect x="376" y="361" width="94" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="423" y="373" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">INFRASTRUCTURE</text>
+  <text x="268" y="410" font-size="12.5" font-weight="700" fill="#13315C">Read every asset</text>
+  <text x="268" y="432" font-size="10.5" fill="#5A6B7B">Queues fan the dataset's assets out</text>
+  <text x="268" y="446" font-size="10.5" fill="#5A6B7B">so each is processed independently</text>
+  <text x="268" y="460" font-size="10.5" fill="#5A6B7B">and retried on its own. PDAL runs in</text>
+  <text x="268" y="474" font-size="10.5" fill="#5A6B7B">a container to read each file's real</text>
+  <text x="268" y="488" font-size="10.5" fill="#5A6B7B">metadata: point count, bounds,</text>
+  <text x="268" y="502" font-size="10.5" fill="#5A6B7B">coordinate system, statistics.</text>
 
-  <!-- 6. dispatch-ingest -->
-  <rect x="380" y="450" width="220" height="55" rx="10" fill="#f6f8fa" stroke="#57606a" stroke-width="1.25"/>
-  <text x="490" y="472" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">dispatch-ingest</text>
-  <text x="490" y="489" text-anchor="middle" font-size="10.5" fill="#57606a">fires once, at merge</text>
+  <!-- Step 8 -->
+  <rect x="498" y="348" width="228" height="168" rx="10" fill="#FFFBF3" stroke="#E8A33D" stroke-width="1.5"/>
+  <circle cx="522" cy="372" r="13" fill="#E8A33D"/>
+  <text x="522" y="377" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">8</text>
+  <rect x="620" y="361" width="94" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="667" y="373" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">INFRASTRUCTURE</text>
+  <text x="512" y="410" font-size="12.5" font-weight="700" fill="#13315C">Assemble the record</text>
+  <text x="512" y="432" font-size="10.5" fill="#5A6B7B">When the last asset lands, one</text>
+  <text x="512" y="446" font-size="10.5" fill="#5A6B7B">assembly step writes the dataset's</text>
+  <text x="512" y="460" font-size="10.5" fill="#5A6B7B">STAC Collection, ItemCollection and</text>
+  <text x="512" y="474" font-size="10.5" fill="#5A6B7B">GeoParquet, queues a hero image</text>
+  <text x="512" y="488" font-size="10.5" fill="#5A6B7B">from the real viewer, and comments</text>
+  <text x="512" y="502" font-size="10.5" fill="#5A6B7B">the result on your PR.</text>
 
-  <!-- 7. infra: real ingest -->
-  <rect x="705" y="450" width="220" height="70" rx="10" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
-  <text x="815" y="472" text-anchor="middle" font-size="12.5" font-weight="600" fill="#116329">Real ingest</text>
-  <text x="815" y="488" text-anchor="middle" font-size="10.5" fill="#116329">writes the dataset, enqueues</text>
-  <text x="815" y="502" text-anchor="middle" font-size="10.5" fill="#116329">metadata + derivative processing</text>
+  <!-- Step 9 -->
+  <rect x="742" y="348" width="228" height="168" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
+  <circle cx="766" cy="372" r="13" fill="#E8A33D"/>
+  <text x="766" y="377" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">9</text>
+  <rect x="864" y="361" width="94" height="17" rx="8.5" fill="#0B2545"/>
+  <text x="911" y="373" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">INFRASTRUCTURE</text>
+  <text x="756" y="410" font-size="12.5" font-weight="700" fill="#13315C">Publish</text>
+  <text x="756" y="432" font-size="10.5" fill="#5A6B7B">The site is rebuilt so the dataset</text>
+  <text x="756" y="446" font-size="10.5" fill="#5A6B7B">page goes live, and the archive-wide</text>
+  <text x="756" y="460" font-size="10.5" fill="#5A6B7B">catalog and collections list update.</text>
+  <text x="756" y="474" font-size="10.5" fill="#5A6B7B">The merged archive parquet is</text>
+  <text x="756" y="488" font-size="10.5" fill="#5A6B7B">rebuilt on a six-hourly pass, so it</text>
+  <text x="756" y="502" font-size="10.5" fill="#5A6B7B">can trail the page by a while.</text>
 
-  <!-- 8. completion comment -->
-  <rect x="380" y="545" width="220" height="55" rx="10" fill="#ddf4ff" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="490" y="567" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0b3d91">Completion comment on PR</text>
-  <text x="490" y="584" text-anchor="middle" font-size="10.5" fill="#0b3d91">queued, or failure + reason</text>
+  <!-- Arrows across phase B -->
+  <path d="M240,432 L250,432" fill="none" stroke="#E8A33D" stroke-width="1.5" marker-end="url(#tipGold)"/>
+  <path d="M484,432 L494,432" fill="none" stroke="#E8A33D" stroke-width="1.5" marker-end="url(#tipGold)"/>
+  <path d="M728,432 L738,432" fill="none" stroke="#E8A33D" stroke-width="1.5" marker-end="url(#tipGold)"/>
 
-  <!-- Arrows -->
-  <path d="M315,112 L375,112" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M315,120 L360,182 L375,182" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M490,140 L490,150" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M490,210 L490,220" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M490,280 L490,295" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M600,327 L700,327" fill="none" stroke="#9a6700" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M705,345 L340,335 L317,335" fill="none" stroke="#1f6feb" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
-  <path d="M205,370 L205,445" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="222" y="410" font-size="10.5" fill="#1a7f37" font-style="italic">all green -&gt; merge</text>
-  <path d="M315,477 L375,477" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M600,477 L700,477" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M815,520 L815,572 L602,572" fill="none" stroke="#1f6feb" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
-
-  <!-- reject path -->
-  <path d="M600,252 L680,252" fill="none" stroke="#cf222e" stroke-width="1.5"/>
-  <path d="M680,252 L680,595 L602,595" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="700" y="245" font-size="10.5" fill="#82071e" font-style="italic">close &amp; resubmit as</text>
-  <text x="700" y="258" font-size="10.5" fill="#82071e" font-style="italic">separate PRs</text>
-
-  <!-- legend -->
-  <rect x="705" y="560" width="14" height="14" rx="3" fill="#f6f8fa" stroke="#57606a"/>
-  <text x="725" y="571" font-size="10.5" fill="#57606a">runs in this repo's own CI (no credentials needed)</text>
+  <!-- Footer notes -->
+  <line x1="10" y1="540" x2="970" y2="540" stroke="#E7EEF5" stroke-width="1"/>
+  <text x="10" y="560" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">This repo holds no storage credentials.</tspan> Step 2 needs none at all; step 3 needs only a token scoped to firing that one dispatch, whose payload carries no secrets.</text>
+  <text x="10" y="578" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">Deleting a manifest directory</tspan> runs the same shape in reverse: the PR is labelled <tspan font-family="Consolas, 'DejaVu Sans Mono', monospace">removal</tspan>, and merging it de-indexes the dataset. The data itself stays in storage.</text>
+  <text x="10" y="596" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">Nothing here is a one-way door.</tspan> Re-running the whole path for a dataset that is already live takes one label or one comment — see “Asking for work” in README.md.</text>
 </svg>

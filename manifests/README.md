@@ -18,11 +18,22 @@ legend.
 
 ## Adding a dataset
 
-Each pull request may only add or edit **one** dataset directory under
-`manifests/` -- CI rejects a PR that touches more than one (with a
-comment explaining why), so a broken dataset never blocks review of an
-unrelated one sharing the same PR. If you're editing more than one
-dataset, open separate PRs.
+Each pull request may only add, edit, or remove **one** dataset
+directory under `manifests/` -- CI rejects a PR that touches more than
+one (with a comment explaining why), so a broken dataset never blocks
+review of an unrelated one sharing the same PR. If you're changing more
+than one dataset, open separate PRs.
+
+This is the pattern [conda-forge](https://conda-forge.org/) established
+for software packages, applied to data: one recipe, one pull request,
+reviewed and built in the open. See "Why it works this way" below for
+what else is borrowed from it.
+
+(Maintainers only: a PR whose title contains `[migration]` is exempt
+from the one-dataset rule, and validates the whole repo instead of the
+changed files -- for schema migrations that necessarily touch every
+manifest. It is not a shortcut for bundling datasets: a multi-dataset
+`[migration]` PR gets no preflight and triggers no ingest on merge.)
 
 1. Create a new directory `manifests/<dataset-id>/` (the directory name
    *is* the dataset id -- `id` inside `manifest.yaml` must match it
@@ -37,17 +48,18 @@ dataset, open separate PRs.
 4. Open a pull request. CI (`scripts/validate-manifests.mjs`) validates
    your manifest against [`schema.json`](schema.json) plus a few checks
    schema.json can't express on its own (mostly: do the relative-path
-   references you gave actually exist on disk), and a separate check
-   confirms any foreign/https URL your manifest references is actually
-   reachable.
+   references you gave actually exist on disk, and is a `github_owner`
+   named), and a separate check confirms any foreign/https URL your
+   manifest references is actually reachable.
 5. Within a minute or two, a bot comment appears on your PR reporting
    the *real* checks against pointcloud.org's own infrastructure --
    see "How ingest actually happens" below. Push a fixup commit and it
    updates in place; you don't need to wait for a merge to find out
    your `items_dir` prefix has a CRS mismatch or a `pdal_filters_file`
    has a typo'd option.
-6. Once merged (and every check above is green), ingest starts for
-   real.
+6. A maintainer merges it, and ingest starts for real. Merging is the
+   only step in the whole path that needs a human decision -- preflight
+   has already reported everything that can be known before it.
 
 ## Grouping datasets into directories
 
@@ -70,39 +82,66 @@ dataset today) and only nest it once a second, related dataset shows up.
 
 ## How ingest actually happens
 
-![Diagram: a manifest PR flows through validation and preflight while open, then through ingest once merged](ingest-flow.svg)
+![Diagram: nine numbered steps. Steps one to five repeat on every push while the pull request is open -- open a PR, credential-free CI checks, preflight dispatch, real checks against storage, answers posted back on the PR. Steps six to nine fire once at merge -- merge, read every asset, assemble the STAC record, publish.](ingest-flow.svg)
 
-This repo holds no ingest credentials at all -- the checks CI can run
-directly here (schema shape, do relative-path references exist
-locally, is a foreign/https URL reachable) need none, but anything that
-actually has to ask pointcloud.org's storage backend something (does
-this file exist, do these tiles share a coordinate system, does this
-PDAL filter list parse) happens on pointcloud.org's own infrastructure,
-which this repo's `.github/workflows/manifest-ingest.yml` reaches by
-firing a generic "please check/ingest this dataset" dispatch event --
-it holds no credentials for and knows nothing about how that
-infrastructure is actually implemented. Two different dispatches fire
-from the same workflow:
+Two dispatches fire from the same workflow
+(`.github/workflows/manifest-ingest.yml`), and the split between them
+is the thing worth understanding:
 
-- **Preflight** (`manifest-preflight`) -- fires on every push to an
-  open PR. Read-only: checks that referenced data files exist,
+- **Preflight** (`manifest-preflight`) -- fires on **every push** to an
+  open PR, once schema validation has passed (a manifest that doesn't
+  validate gets no preflight; there'd be nothing coherent to check).
+  Read-only: checks that referenced data files exist,
   `items_dir` CRS consistency, and `pdal_filters`/`pdal_filters_file`
   validity, then reports pass/fail straight onto your PR as an
   updating comment plus a `pointcloud/*` commit status per check.
   Never enqueues anything, never emails anyone, however many times you
-  push.
-- **Ingest** (`manifest-ingest`) -- fires once, when the PR merges.
-  Writes the manifest, enqueues real ingest, and posts its own
-  outcome comment once the (same) checks resolve for real -- an
-  `items_dir` dataset's CRS check is asynchronous and can take a
-  while for a large prefix, so this comment may land after the
-  workflow run that triggered it has already finished.
+  push. Fix, push, watch the same comment update.
+- **Ingest** (`manifest-ingest`) -- fires **once, when the PR merges**.
+  Enqueues the real work, then posts its own outcome comment -- first
+  to say the assets are queued, then updated in place once assembly
+  finishes with the point count, size, license, and a link to the live
+  dataset page. An `items_dir` dataset's CRS check is asynchronous and
+  can take a while for a large prefix, so that comment may land well
+  after the workflow run that triggered it has finished.
+
+This repo holds no storage credentials. The checks CI can run directly
+here (schema shape, do relative-path references exist locally, is a
+`github_owner` named, is a foreign/https URL reachable) need none at
+all. Anything that has to ask pointcloud.org's storage backend a
+question (does this file exist, do these tiles share a coordinate
+system, does this PDAL filter list parse) happens on pointcloud.org's
+own infrastructure, which this repo reaches by firing a generic "please
+check/ingest this dataset" event whose payload carries no secrets. The
+only credential involved on this side is a token scoped to firing that
+one dispatch, and nothing here knows how the other side is implemented.
 
 If a preflight check ever seems stuck or wrong, look at the
 `pointcloud/*` commit statuses on your PR's latest commit (next to the
 usual CI checks) -- each one names exactly which check it is
 (`pointcloud/file-existence`, `pointcloud/crs-consistency`,
 `pointcloud/pdal-filters`).
+
+### Why it works this way
+
+The design is lifted from [conda-forge](https://conda-forge.org/),
+which solved the same social problem for software packages: how do you
+let anyone contribute to a shared, trusted collection without handing
+them the keys to it?
+
+| conda-forge | here |
+| --- | --- |
+| A recipe describes a package; the build happens on CI | A manifest describes a dataset; the ingest happens on CI |
+| One recipe per feedstock, one change per PR | One dataset directory per PR |
+| Maintainers review; bots do the mechanical work | Same -- every check, label, and comment on your PR is automated |
+| `@conda-forge-admin, please ...` commands | `@pointcloud-org, please ...` commands (see below) |
+| Contributors never hold the signing/upload keys | Contributors never hold the storage credentials |
+
+The consequence worth internalising: **the pull request is the unit of
+work.** Not a form, not a ticket, not an email to a data manager. If
+you want something to happen -- a dataset added, re-ingested, removed,
+its metadata corrected -- it happens as a reviewable diff, and the
+history of every dataset in the archive is `git log`.
 
 ## Manifest reference
 
@@ -118,13 +157,15 @@ title: My Dataset
 description: A one-line (or longer) description. May contain Markdown.
 license: CC-BY-4.0
 
+keywords: [lidar, some, tags]   # at least one
+
 providers:                  # at least one; at least one needs a contact
   - name: Some Org
     pointcloud_org:
-      contact:               # who gets emailed if ingest preflight fails
+      contact:
         name: Jane Doe
         email: jane@example.org
-        github_owner: janedoe   # required: GitHub username, so automation can @-mention you
+        github_owner: janedoe   # GitHub username -- see below, this one is mandatory
 
 pointcloud_org:
   derivatives: true          # generate DTM/DSM/ambient-occlusion COGs?
@@ -139,8 +180,23 @@ items:                        # see "Describing the data" below
       copc_resolution: 1
 ```
 
-`keywords` (STAC's term for schema_version 1's `tags`) is optional as of
-schema_version 2, but still a good idea for search/browse.
+`keywords` is STAC's term for schema_version 1's `tags`; at least one is
+required, and they drive the tag filtering on the site's catalog page.
+
+### `github_owner` is required, on every manifest
+
+At least one `providers[]` entry must carry a
+`pointcloud_org.contact` with all three of `name`, `email`, and
+`github_owner`. Validation fails outright without a `github_owner` --
+there is no dataset in the archive that doesn't name one.
+
+It is the account automation @-mentions when this dataset needs a human:
+most often when a weekly sweep finds that data the manifest points at
+has stopped being reachable upstream. Naming yourself does **not** claim
+responsibility for the upstream data, and does not imply you produced
+it -- only that you are the person to ask about *this manifest*. For a
+dataset you're contributing but don't own the data for, you are still
+the right `github_owner`.
 
 ### License
 
@@ -171,7 +227,8 @@ if given) -- the standard STAC way to attach a license URL.
 
 ### Describing the data
 
-Exactly one of these four:
+Exactly one of these five -- they're mutually exclusive, and the schema
+enforces that:
 
 - **`items`** -- a hand-authored list, one entry per file, each shaped
   like a minimal STAC Item. Use this when you have a small, fixed
@@ -381,19 +438,25 @@ that id actually resolves to a reference page, e.g.
 `https://spatialreference.org/ref/epsg/<code>/` for an EPSG code.
 
 `federate: true` (default false; meaningful alongside a hand-authored
-`items` list or a `stac_item` reference -- ignored for `items_dir`/
-`external_source`) tells ingest to copy every asset's bytes from
-wherever this manifest currently points into pointcloud.org's own
-storage once, at ingest time, rather than continuing to read from the
-original source on every later access. For a federated `stac_item`
-reference, the reference itself is replaced with a materialized `items`
-entry pointing at the copy once federation completes. Use `federate`
+`items` list -- ignored for `items_dir`/`external_source`, and refused
+outright for `stac_item`, see below) tells ingest to copy every asset's
+bytes from wherever this manifest currently points into pointcloud.org's
+own storage once, at ingest time, rather than continuing to read from
+the original source on every later access. Use `federate`
 when a dataset's source host isn't reliably durable long-term (a
 personal server, a time-limited hosting arrangement) and the intent is
 to actually archive a copy here. A PR whose manifest sets this gets a
 `federated` label and a comment calling it out (including an estimated
 size, in GB, of what will be copied), since it's a meaningfully
 different commitment than the default (link out, don't copy).
+
+Two limits on what may be copied. First, a format allowlist: only
+`.copc.laz`, `.laz`, `.las`, `.tif`, and `.tiff` assets can be
+federated, and CI fails the PR (naming each offending href) otherwise --
+this archive stores point clouds and rasters, not arbitrary files
+fetched from arbitrary URLs. Second, `federate` cannot be combined with
+`stac_item`: the filenames to be copied aren't knowable from the
+manifest alone in that form.
 
 A `metadata_links[].href` may be a plain relative filename -- put the
 file in `manifests/<dataset-id>/` alongside `manifest.yaml`, and the
@@ -408,7 +471,31 @@ paragraph or two:
 description: description.md   # a file in this manifest's own directory
 ```
 
-### Overriding derivative generation
+### Directives: asking for the processing you want
+
+A manifest doesn't just describe a dataset, it also states what should
+be *done* with it. These are the fields that drive real processing
+operations, all of them declarative -- you never invoke a pipeline, you
+state an intent and the ingest side decides how to satisfy it:
+
+| Directive | Drives |
+| --- | --- |
+| `pointcloud_org.federate` | whether the bytes are copied into this archive or only linked |
+| `pointcloud_org.derivatives` | whether DTM/DSM/ambient-occlusion rasters are requested (see the caveat below) |
+| `pointcloud_org.derivative_processing` | how they'd be built -- resolution, PDAL filter stages, WhiteboxTools parameters |
+| `derivative_processing.resolution` | also bounds the elevation-statistics read behind the hero image and the viewer's default colour range |
+| `pointcloud_org.viewer.default_asset_id` | which asset the dataset page's viewer opens on, and which one the hero image is captured from |
+| `copc_resolution` (per item or `items_dir`) | the resolution each asset's metadata is read at |
+| `items_dir.pattern` | which files under a prefix become items |
+
+**Caveat on derivatives, so nobody plans around a promise:** the
+`derivatives`/`derivative_processing` directives are validated, carried
+through the pipeline, and enqueued -- but the stage that would actually
+produce the DTM/DSM/ambient-occlusion rasters is still a stub, so no
+raster output exists yet. Setting them today records the intent
+correctly and costs nothing; it just doesn't yet produce a file.
+
+#### Overriding derivative generation
 
 Only consulted when `pointcloud_org.derivatives: true`. Every field is
 optional; omit anything to use the engine's default.
@@ -462,18 +549,75 @@ and from the root STAC Catalog. Its underlying point-cloud data is
 *index* (the site and STAC output), the archived data itself stays in
 storage.
 
-## Reingesting a dataset
+## Asking for work: labels and commands
 
-To re-run ingest for a dataset that's already live -- picking up an
-infrastructure-side fix, for example, with no manifest content change
-needed -- apply the `reingest` label to the PR that originally
-added/updated it (any merged PR under `manifests/<dataset-id>/` works,
-not just the very first one). This opens a new, tiny PR that re-touches
-that dataset's `manifest.yaml` (a no-op comment line, nothing else
-changes) and merges it automatically once checks pass, which re-runs
-the same ingest pipeline end to end. A comment gets posted back on the
-PR you labeled, linking to the new one. The label removes itself once
-processed, so it can be reapplied later for another reingest.
+Everything above is driven by the *content* of your manifest. Two other
+mechanisms let you drive the pipeline without changing any content: a
+label on a PR, or a comment addressed to the bot.
+
+### Labels
+
+| Label | Who applies it | What it means |
+| --- | --- | --- |
+| `removal` | automation | This PR deletes a dataset directory. Applied together with a comment spelling out what merging it will do. |
+| `federated` | automation | This PR's manifest sets `pointcloud_org.federate: true`, so merging it copies data into pointcloud.org's storage. The accompanying comment estimates how much. |
+| `reingest` | **you**, on an already-merged PR | Re-run the whole ingest for that dataset. See below. |
+
+The first two are signals *from* the automation, applied so a reviewer
+can see at a glance what a PR commits the archive to. `reingest` is the
+one you apply yourself; it's an instruction.
+
+### Reingesting a dataset
+
+To re-run ingest for a dataset that's already live -- to pick up an
+infrastructure-side fix, with no manifest content change needed --
+apply the `reingest` label to any merged PR that touched
+`manifests/<dataset-id>/`, or comment
+`@pointcloud-org, please reingest <dataset-id>` anywhere.
+
+Either way the bot opens a new, small PR that re-touches that dataset's
+`manifest.yaml` (an appended comment line; nothing else changes) and
+comments back where the request came from. **It does not merge that PR
+-- an admin does.** Nothing is re-ingested until it lands, and the
+ordinary checks on it are the gate, exactly as for a first-time
+contribution. The label removes itself afterwards so it can be applied
+again later.
+
+### Commands
+
+Comment on any issue or pull request:
+
+```
+@pointcloud-org, please reingest chicago-downtown
+@pointcloud-org, please refresh-stac
+@pointcloud-org, please check-reachability
+```
+
+- **`reingest <dataset-id>`** -- as above. The id is a directory name
+  under `manifests/`; for a grouped dataset use just the leaf.
+- **`refresh-stac`** -- rebuilds the archive-wide STAC artifacts (the
+  root `catalog.json`, `collections.json`, and the single-file
+  `items.parquet`). Useful after a manual fix; normally these maintain
+  themselves on every ingest and on a six-hourly schedule.
+- **`check-reachability`** -- sweeps the whole archive and reports a
+  table of only what's broken, grouped by the responsible
+  `github_owner`. It checks every dataset, but not every URL: each
+  dataset's single points of failure (an `ept_source`, `stac_item` or
+  `external_source`) are always fetched, and its listed assets are
+  sampled -- up to 25 per dataset, spread across the list -- because at
+  archive scale the alternative is hundreds of thousands of requests to
+  other people's servers. The report says how many it sampled. This also
+  runs on its own every Monday, filing or updating a single
+  `upstream-drift` tracking issue.
+
+Note that the per-PR reachability check is exhaustive, unlike the sweep:
+when you open a pull request, every foreign URL your manifest names is
+fetched.
+
+Anyone can ask, but these commands change published data, so they only
+run for accounts with write access; anyone else gets a comment saying
+so, and nothing else happens. Past that check, an unrecognised command
+gets a help reply listing the three.
 
 ## License
 
