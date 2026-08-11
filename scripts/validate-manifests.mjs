@@ -287,6 +287,40 @@ function validateOneDataset(datasetDir, index, total) {
   // segment (path.basename) has to match id; the rest is purely a
   // grouping directory, not part of the id (see README.md's "Grouping
   // datasets into directories").
+  // Every dataset MUST name a responsible GitHub account, with no
+  // exceptions. Automation has to have someone to @-mention when a
+  // dataset breaks -- the reachability sweep's Notifications section is
+  // the concrete case (see scripts/reachability.mjs) -- and a dataset
+  // whose upstream has vanished with nobody to tell is the exact failure
+  // this prevents.
+  //
+  // The owner is emphatically NOT a claim of responsibility for the data
+  // itself. Most of this archive references third-party data (USGS and
+  // others); `github_owner` names whoever maintains the *manifest* here,
+  // which is a different and much smaller commitment.
+  //
+  // schema.json does constrain this -- `providers` has a `contains` rule
+  // requiring at least one provider whose contact carries a
+  // github_owner -- but Ajv reports that as "/providers must contain at
+  // least 1 valid item(s)", which tells a contributor nothing about what
+  // to actually add. This duplicate check exists purely to fail with a
+  // message someone can act on.
+  log("checking a github_owner is present...");
+  const owners = (Array.isArray(normalized?.providers) ? normalized.providers : [])
+    .map((p) => p?.pointcloud_org?.contact?.github_owner)
+    .filter((o) => typeof o === "string" && o.length > 0);
+  if (owners.length === 0) {
+    log("no github_owner");
+    errors.push(
+      `no github_owner: at least one entry in providers[] must set ` +
+        `pointcloud_org.contact.github_owner to a GitHub username. This is who automation notifies when ` +
+        `this dataset's data becomes unreachable -- it does not imply responsibility for the upstream data ` +
+        `itself, only for this manifest.`,
+    );
+  } else {
+    log(`github_owner present (${owners.join(", ")})`);
+  }
+
   const leafName = path.basename(datasetDir);
   log(`checking id ("${normalized?.id}") matches leaf directory name ("${leafName}")...`);
   if (normalized?.id && normalized.id !== leafName) {
