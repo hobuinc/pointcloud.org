@@ -79,8 +79,15 @@ providers:
         email: howard@hobu.co
         github_owner: hobu
 links:
+  # Points at the project report rather than the 3DEP programme page.
+  # www.usgs.gov returns HTTP 403 to non-browser clients, which the weekly
+  # reachability sweep checks `rel: about` with -- using it here would
+  # have reported this dataset as unreachable every week forever, for a
+  # link that works fine in a browser. Caught before merge by running the
+  # sweep locally. The programme page is still recorded, as the USGS
+  # provider's `url` above, which nothing probes.
   - rel: about
-    href: https://www.usgs.gov/3d-elevation-program
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IL_4_County_QL1_LiDAR__2016_B16/IL_4County_Cook_2017/reports/G16PD00498_Northeast_Illinois_Project_Report_20190719.pdf
 extent:
   temporal:
     interval:
