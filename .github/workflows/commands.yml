@@ -263,28 +263,36 @@ jobs:
       - name: check-reachability
         if: steps.auth.outputs.unauthorized != 'true' && steps.parse.outputs.verb == 'check-reachability'
         env:
-          # Manifest links in the report point at the ref the command ran
-          # on, and dataset links at the live site.
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: ${{ github.event.repository.default_branch }}
         run: |
           set +e
           npm install --no-audit --no-fund >/dev/null 2>&1
-          # Uses the sweep script, not check-reachability.mjs. The latter
-          # is the per-PR gate: it prints a line per URL, which is the
-          # right shape for one dataset in a pull request and completely
-          # unusable across an archive of 1000s -- the first version of
-          # this command dumped exactly that into a <details> block.
+          # Runs the same plan/check/report pipeline the weekly sweep uses
+          # (scripts/reachability.mjs), just with the shards executed as
+          # background processes in this one runner rather than as a
+          # GitHub Actions matrix -- an on-demand command should answer in
+          # one job rather than fan out across three.
           #
-          # The sweep script instead reports ONLY unreachable datasets, as
-          # a table, which is what makes this answerable at scale. Sharing
-          # it also means the on-demand command and the weekly sweep can
-          # never disagree about what "reachable" means.
-          node scripts/upstream-drift-sweep.mjs > /tmp/reach.md
+          # Sharing the script matters: the command and the sweep can
+          # never disagree about what "reachable" means, and both produce
+          # the same short summary. An earlier version of this command
+          # shelled out to check-reachability.mjs (the per-PR gate, which
+          # prints a line per URL) and pasted its output into a <details>
+          # block -- an 11 KB comment for a clean archive, which is
+          # exactly the wrong shape at 1000s of datasets.
+          rm -rf /tmp/shards && mkdir -p /tmp/shards
+          SHARDS=$(node scripts/reachability.mjs plan | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).shards))')
+          echo "fanning out across $SHARDS shard(s)"
+          for i in $(seq 0 $((SHARDS-1))); do
+            node scripts/reachability.mjs check --shard "$i" --shards "$SHARDS" \
+              --out "/tmp/shards/reachability-shard-$i.json" &
+          done
+          wait
+          node scripts/reachability.mjs report --results /tmp/shards > /tmp/reach.md
           STATUS=$?
           set -e
           gh issue comment "$ISSUE_NUMBER" --body-file /tmp/reach.md
-          # Surface a red X on the run itself when something is broken, so
-          # the Actions list reflects archive health rather than "the
-          # command executed successfully".
+          # Non-zero when something is unreachable, so the Actions list
+          # reflects archive health rather than "the command ran".
           exit "$STATUS"

@@ -1,49 +1,43 @@
-# Scheduled upstream-drift sweep.
+# Scheduled upstream-drift sweep, fanned out across parallel runners.
 #
-# pointcloud.org's archive is mostly *references to other people's data*
-# -- at time of writing 47 of 51 collections point at USGS-hosted EPT
-# endpoints that this project does not control. Those move: workunits get
-# republished under new names, buckets get reorganized, endpoints get
-# retired. Until now nothing noticed. A dataset could 404 for months and
-# the only way to find out was a user reporting a broken viewer.
+# pointcloud.org's archive is mostly *references to other people's data* --
+# at time of writing 51 of 68 datasets point at third-party endpoints
+# (mostly USGS-hosted EPT) that this project does not control. Those move:
+# workunits get republished under new names, buckets get reorganized,
+# endpoints get retired. This is the local equivalent of conda-forge's
+# autotick bot, which exists for the same reason (see
+# CONDA-FORGE-GAP-ANALYSIS.md in the infrastructure repo, Gap 2).
 #
-# This is the local equivalent of conda-forge's autotick bot, which exists
-# for exactly this reason: upstream changes and the catalog has to follow.
-# (See CONDA-FORGE-GAP-ANALYSIS.md in the infrastructure repo, Gap 2.)
+# ## Queue-and-runner shape
 #
-# Deliberately built on the same credential-free script that already
-# guards every PR (`scripts/check-reachability.mjs`), so the sweep checks
-# precisely what the pre-merge gate checks -- no second, drifting
-# implementation of "is this dataset still reachable".
+# Three jobs, fan-out then fan-in:
 #
-# ## Reporting model
+#   plan   reads every manifest once, builds the URL work list, and sizes
+#          the matrix (one shard per ~URLS_PER_SHARD URLs, capped)
+#   check  matrix of runners; each takes every Nth URL and writes only its
+#          FAILURES to an artifact
+#   report downloads every shard's artifact, aggregates, and maintains the
+#          tracking issue
 #
-# One long-lived tracking issue, found by the `upstream-drift` label and
-# updated in place, rather than a new issue per run. A weekly cron that
-# opens a fresh issue every time produces noise nobody reads; a single
-# issue whose body is rewritten gives a current, at-a-glance answer and a
-# natural comment thread of state changes.
+# A single-process sweep was O(every URL in the archive) in one runner,
+# which at 1000s of datasets (and single datasets listing 10,000s of tiles)
+# is minutes-to-hours of serial wall clock, with one network hiccup able to
+# take the whole sweep down. Sharding makes wall clock a division problem
+# and confines a failure to one shard. The work is sharded by URL rather
+# than by dataset because dataset sizes here differ by three orders of
+# magnitude -- per-dataset sharding just relocates the bottleneck to
+# whichever runner draws the largest dataset.
 #
-# The issue is closed automatically when a sweep passes cleanly, and
-# reopened when one fails, so "is anything broken upstream right now" is
-# answerable from whether that issue is open.
-#
-# Also pings each affected dataset's `github_owner` (from the manifest's
-# providers[].pointcloud_org.contact) so the person responsible hears
-# about it, rather than the report sitting in a queue only maintainers
-# read.
+# See scripts/reachability.mjs for why it samples rather than checking
+# every tile of every dataset, and why only failures cross between jobs.
 name: Upstream drift sweep
 
 on:
   schedule:
-    # 06:00 UTC on Mondays. Weekly is the right cadence for third-party
-    # data republication -- daily would mostly re-report the same
-    # breakage, and monthly is long enough that a broken dataset stays
-    # broken through a whole release cycle.
+    # 06:00 UTC Mondays. Weekly suits third-party republication: daily
+    # mostly re-reports the same breakage, monthly lets a broken dataset
+    # sit through an entire release cycle.
     - cron: "0 6 * * 1"
-  # So a maintainer can force a sweep without waiting for Monday, and so
-  # `@pointcloud-org, please check-reachability` has an equivalent that
-  # produces the tracking issue rather than a one-off comment.
   workflow_dispatch: {}
 
 permissions:
@@ -51,7 +45,62 @@ permissions:
   issues: write
 
 jobs:
-  sweep:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shard_ids: ${{ steps.plan.outputs.shard_ids }}
+      shards: ${{ steps.plan.outputs.shards }}
+      summary: ${{ steps.plan.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - name: Size the matrix
+        id: plan
+        run: |
+          PLAN=$(node scripts/reachability.mjs plan)
+          echo "$PLAN"
+          echo "shard_ids=$(echo "$PLAN" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.stringify(JSON.parse(s).shardIds)))')" >> "$GITHUB_OUTPUT"
+          echo "shards=$(echo "$PLAN" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).shards))')" >> "$GITHUB_OUTPUT"
+          echo "summary=$PLAN" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      # One runner per shard. `fail-fast: false` is essential: a shard
+      # whose slice happens to contain a broken URL must not cancel the
+      # other shards, or the report would be built from partial data and
+      # under-report breakage.
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shard_ids) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - name: Check this shard
+        run: |
+          node scripts/reachability.mjs check \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }} \
+            --out "reachability-shard-${{ matrix.shard }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reachability-shard-${{ matrix.shard }}
+          path: reachability-shard-${{ matrix.shard }}.json
+          retention-days: 7
+
+  report:
+    needs: [plan, check]
+    # `always()` so a shard that errored outright (rather than merely
+    # finding a failure) still produces a report from whatever did
+    # complete, instead of silently skipping the whole sweep.
+    if: always()
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
@@ -60,25 +109,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Install dependencies (js-yaml)
-        run: npm install
-
-      - name: Sweep every dataset's external URLs
-        id: sweep
+      - run: npm install --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: reachability-shard-*
+          path: shards
+          merge-multiple: true
+      - name: Aggregate the shards into one report
+        id: report
         run: |
           set +e
-          node scripts/upstream-drift-sweep.mjs > /tmp/report.md
+          node scripts/reachability.mjs report --results shards > /tmp/report.md
           echo "status=$?" >> "$GITHUB_OUTPUT"
           set -e
-          echo "--- report ---"
           cat /tmp/report.md
 
       - name: Open, update, or close the tracking issue
         run: |
           set -e
           LABEL=upstream-drift
-          # Auto-create the label on first run, same pattern the ingest
-          # workflow uses for `removal`/`federated`.
           gh label create "$LABEL" --color "b60205" \
             --description "Upstream data drift detected by the weekly sweep" 2>/dev/null || true
 
@@ -87,14 +136,14 @@ jobs:
           NUM=$(echo "$EXISTING" | awk '{print $1}')
           STATE=$(echo "$EXISTING" | awk '{print $2}')
 
-          if [ "${{ steps.sweep.outputs.status }}" = "0" ]; then
-            # Clean sweep. Close the tracking issue if it was open, and
-            # say why -- a silently-closed issue is confusing.
+          if [ "${{ steps.report.outputs.status }}" = "0" ]; then
             if [ -n "$NUM" ] && [ "$STATE" = "OPEN" ]; then
-              gh issue comment "$NUM" --body "✅ Upstream sweep is clean as of $(date -u +%Y-%m-%dT%H:%MZ) — every external URL across the archive resolved. Closing; this will reopen automatically if a future sweep finds problems."
+              gh issue comment "$NUM" --body-file /tmp/report.md
               gh issue close "$NUM"
+              echo "closed #$NUM -- sweep is clean"
+            else
+              echo "clean sweep, no open tracking issue -- nothing to do"
             fi
-            echo "clean sweep -- nothing to report"
             exit 0
           fi
 
@@ -103,9 +152,6 @@ jobs:
             gh issue edit "$NUM" --title "$TITLE" --body-file /tmp/report.md
             if [ "$STATE" != "OPEN" ]; then
               gh issue reopen "$NUM"
-              gh issue comment "$NUM" --body "Reopened: the $(date -u +%Y-%m-%d) sweep found upstream problems again. Details in the issue body above."
-            else
-              gh issue comment "$NUM" --body "🔁 Re-checked $(date -u +%Y-%m-%dT%H:%MZ); the issue body above has been updated with the current state."
             fi
             echo "updated tracking issue #$NUM"
           else
