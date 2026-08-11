@@ -1,0 +1,166 @@
+schema_version: 2
+
+# A COPC clip of the USGS 3DEP product USGS_LPC_IL_4County_Cook_2017_LAS_2019,
+# covering downtown Chicago. Metadata below was taken 2026-08-11 from
+# USGS's own authoritative sources, not from the original ingest script:
+#
+#   * WESM.csv (the 3DEP work-unit index) for the work unit / project
+#     identifiers, collection dates, quality level, specification,
+#     acquisition method and coordinate reference systems
+#   * the vendor FGDC XML linked under metadata_links for the producer,
+#     accuracy figures and processing history
+#
+# Two things worth recording, because both are easy to get wrong here:
+#
+# 1. The vendor FGDC XML sitting in THIS work unit's metadata directory
+#    describes its Geographic Extent as "Lake county, Illinois covering
+#    approximately 466 square miles". That is not a description of Cook
+#    County -- it is a project-level document copied into each work
+#    unit's directory without the extent text being localised. The county
+#    stated below comes from the work unit name and WESM, which are
+#    authoritative for it; the FGDC XML is used only for producer,
+#    accuracy and processing facts, which are genuinely project-wide.
+#
+# 2. That directory holds two point-cloud XMLs, named ..._8ppsm.xml and
+#    ..._20ppsm.xml. They are byte-for-byte identical (verified), so the
+#    density distinction exists only in the filenames and neither can be
+#    cited as evidence of this work unit's density. The nominal pulse
+#    spacing below (0.35 m) is what both documents actually state.
+#
+# Unlike the USGS 3DEP datasets under manifests/usgs-3dep/, this one is
+# NOT served from USGS's public EPT bucket -- there is no EPT resource
+# for IL_4County_Cook_2017 (confirmed: ept.json 404s). The clip below is
+# hosted in pointcloud.org's own storage and is the only form served here.
+#
+# RENAMED 2026-08-11 from the id "chicago" to "chicago-downtown", to match
+# what this actually is -- a clip of the Loop and the riverfront, not the
+# city. The id is simultaneously the published URL
+# (pointcloud.org/datasets/<id>/), the R2 key prefix, and the STAC
+# Collection id, so the rename was done as three steps rather than an edit:
+# the raw COPC was copied in R2 from chicago/ to chicago-downtown/ (via the
+# infrastructure repo's r2-move-object workflow, size-verified), then this
+# manifest was added under the new id, then the old "chicago" dataset was
+# de-indexed by deleting its directory. Everything else that lived under
+# the old prefix (stac/*, manifest.json, hero.png) was derived output and is
+# regenerated here rather than moved.
+type: Collection
+stac_version: "1.0.0"
+id: chicago-downtown
+title: Chicago Downtown
+description: >
+  Classified airborne lidar point cloud of downtown Chicago, clipped to the
+  Loop and the surrounding riverfront and lakefront from the USGS 3DEP work
+  unit IL_4County_Cook_2017 (Cook County, Illinois). Collected 16 April to
+  7 May 2017 by Geiger-mode lidar for the "WI Kenosha-Racine Counties and
+  IL 4 County QL1 Lidar" project under USGS contract G16PD00498, and
+  processed to classified LAS 1.4 by Dewberry. Acquired to Quality Level 1
+  at a nominal pulse spacing of 0.35 m, meeting the USGS Lidar Base
+  Specification 1.2 -- the densest specification tier 3DEP publishes, which
+  is what makes the vertical structure of the downtown high-rises legible
+  in the viewer.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords:
+  - illinois
+  - chicago
+  - cook-county
+  - usgs
+  - 3dep
+  - lidar
+  - urban
+  - geiger-mode
+  - dewberry
+  - copc
+providers:
+  - name: Dewberry
+    roles: [processor]
+    url: https://www.dewberry.com/
+  - name: Harris Corporation
+    roles: [producer]
+    url: https://www.l3harris.com/
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor]
+    url: https://www.usgs.gov/3d-elevation-program
+  - name: Hobu, Inc.
+    roles: [host, processor]
+    url: https://hobu.co
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+        github_owner: hobu
+links:
+  # Points at the project report rather than the 3DEP programme page.
+  # www.usgs.gov returns HTTP 403 to non-browser clients, which the weekly
+  # reachability sweep checks `rel: about` with -- using it here would
+  # have reported this dataset as unreachable every week forever, for a
+  # link that works fine in a browser. Caught before merge by running the
+  # sweep locally. The programme page is still recorded, as the USGS
+  # provider's `url` above, which nothing probes.
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IL_4_County_QL1_LiDAR__2016_B16/IL_4County_Cook_2017/reports/G16PD00498_Northeast_Illinois_Project_Report_20190719.pdf
+extent:
+  temporal:
+    interval:
+      - ["2017-04-16", "2017-05-07"]
+
+"sci:citation": >
+  Dewberry (2019). WI Kenosha-Racine Counties and IL 4 County QL1 Lidar;
+  Classified Point Cloud; work unit IL_4County_Cook_2017 (project
+  IL_4_County_QL1_LiDAR_2016_B16). U.S. Geological Survey 3D Elevation
+  Program, contract G16PD00498. Clipped to downtown Chicago and converted
+  to COPC for pointcloud.org. Vertical accuracy for the source project was
+  tested against 114 checkpoints in non-vegetated terrain, meeting a
+  Non-Vegetated Vertical Accuracy of 19.6 cm at 95% confidence (RMSEz
+  10 cm), per the vendor FGDC metadata.
+
+pointcloud_org:
+  derivatives: true
+  # WESM's lpc_pub_date for this work unit. The vendor FGDC XML carries an
+  # earlier pubdate of 2019-02-21, which is when the vendor published its
+  # metadata rather than when USGS published the point cloud.
+  publication_date: 2019-08-19
+  # From WESM's horiz_crs / vert_crs / geoid columns for this work unit.
+  # Both are US survey feet, which is why the source data's Z values are
+  # in feet -- see copc_resolution's note on the clip below.
+  spatial_reference:
+    id: "EPSG:6455"
+    vertical_id: "EPSG:6360"
+    url: https://epsg.io/6455
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  metadata_links:
+    - title: FGDC Classified Point Cloud Metadata (XML, vendor-provided)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IL_4_County_QL1_LiDAR__2016_B16/IL_4County_Cook_2017/best_use_xml/ClassifiedPointCloud_Dewberry_8ppsm.xml"
+    - title: Northeast Illinois Project Report (G16PD00498)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IL_4_County_QL1_LiDAR__2016_B16/IL_4County_Cook_2017/reports/G16PD00498_Northeast_Illinois_Project_Report_20190719.pdf"
+    - title: Checkpoint Survey Report (Appendix A)
+      href: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/IL_4_County_QL1_LiDAR__2016_B16/IL_4County_Cook_2017/reports/Appendix_A_Checkpoint_Survey_Report.pdf"
+  # Every asset below lives in our own Cloudflare R2 bucket, but this
+  # is declared explicitly (rather than inferred from the "pointcloud"
+  # bucket name) so every dataset uniformly states which S3-compatible
+  # service+account hosts it -- AWS S3, this Cloudflare R2 account, or
+  # someone else's bucket. Purely informational for this bucket: the
+  # Worker always fetches "s3://pointcloud/..." via its native R2
+  # binding, never over HTTP, so this value has no effect on fetching.
+  default_endpoint: https://c88d624d8d8f065b1afce73bd44dcf1d.r2.cloudflarestorage.com
+  viewer:
+    enabled: true
+    default_asset_id: chicago-downtown
+
+items:
+  - id: chicago-downtown
+    assets:
+      data:
+        href: s3://pointcloud/chicago-downtown/chicago-downtown.copc.laz
+        type: application/vnd.laszip+copc
+        roles: [data]
+    pointcloud_org:
+      # Carried over from the original clip pipeline definition
+      # (Chicago.json), not re-derived. The source CRS is in US survey
+      # feet (EPSG:6455/6360 above), so this is a resolution in feet, not
+      # metres -- worth knowing before comparing it against the metric
+      # datasets elsewhere in this archive.
+      copc_resolution: 2
