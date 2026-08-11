@@ -1,1 +1,18 @@
 node_modules/
+
+# Local-only secrets for Claude/Cowork sessions working in this repo.
+# Never commit -- this exists specifically so it ISN'T tracked. Mirrors
+# the same entry in the pointcloud.org-infrastructure repo.
+#
+# This is load-bearing: a `git add -A` in a working tree holding this
+# file will stage it, and GitHub's push protection is then the only
+# thing standing between it and a real credential leak (it did catch
+# exactly that on 2026-08-11 -- the push was rejected, nothing leaked,
+# but that's a backstop, not a plan).
+.cowork-secrets.env
+
+# macOS / Office scratch files
+.DS_Store
+~$*.pptx
+~$*.docx
+~$*.xlsx
