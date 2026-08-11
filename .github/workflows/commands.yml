@@ -205,7 +205,12 @@ jobs:
           BRANCH="reingest-${DATASET_ID}-$(date -u +%Y%m%d%H%M%S)"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git config user.name "pointcloud-org"
-          git config user.email "actions@users.noreply.github.com"
+          # The account's canonical GitHub noreply address, so the commit
+          # actually links to @pointcloud-org in the UI. The previous value
+          # ("actions@users.noreply.github.com") is not tied to any account,
+          # so commits appeared with an unlinked author -- and using a real
+          # person's address here would attribute bot commits to them.
+          git config user.email "315518100+pointcloud-org@users.noreply.github.com"
           git checkout -b "$BRANCH"
           echo "# reingest requested by @${SENDER} via command in #${ISSUE_NUMBER} on $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$FILE"
           git add "$FILE"
