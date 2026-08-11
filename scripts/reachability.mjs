@@ -165,6 +165,12 @@ async function loadDatasets() {
       category: totalUrls > 0 ? "remote" : "hosted",
       totalUrls,
       sampledUrls: sampled.length,
+      // Assets only, excluding criticals. The report needs this to say
+      // "all N checked assets failed" accurately -- comparing asset
+      // failures against sampledUrls (which includes the license/about/
+      // ept_source criticals) undercounts and reports "23 of 25" when
+      // every asset it checked was in fact broken.
+      sampledAssets: sampled.length - critical.length,
       urls: sampled,
     });
   }
@@ -288,6 +294,7 @@ if (mode === "check") {
               category: d.category,
               totalUrls: d.totalUrls,
               sampledUrls: d.sampledUrls,
+              sampledAssets: d.sampledAssets,
               parseError: d.parseError ?? null,
             }))
           : [],
@@ -362,24 +369,85 @@ if (mode === "report") {
     process.exit(0);
   }
 
-  lines.push("| Dataset | Reachability | Manifest | Maintainer | Failing |");
-  lines.push("| --- | :---: | --- | --- | --- |");
-  for (const id of brokenIds.slice(0, MAX_ROWS)) {
-    const meta = byId.get(id) ?? { id, file: "(unknown)", owner: null };
-    const datasetLink = `[\`${id}\`](${SITE_BASE_URL}/datasets/${encodeURIComponent(id)}/)`;
-    const manifestLink = `[\`${meta.file}\`](https://github.com/${REPO_SLUG}/blob/${REF_NAME}/${meta.file})`;
-    const maintainer = meta.owner ? `@${meta.owner}` : "_none_";
-    let detail;
-    if (meta.parseError) {
-      detail = "manifest failed to parse";
-    } else {
-      const fs = failuresByDataset.get(id) ?? [];
-      const first = fs[0];
-      const why = first?.result?.error ? first.result.error : `HTTP ${first?.result?.status}`;
-      const more = fs.length > 1 ? ` (+${fs.length - 1} more)` : "";
-      detail = `\`${first?.label}\` → ${why}${more}`;
+  /**
+   * How a dataset's failures read in one table cell.
+   *
+   * The distinction that matters is whether the dataset is *gone* or
+   * merely *damaged*:
+   *
+   *  - a failing critical URL (ept_source/stac_item/external_source)
+   *    means the whole dataset is unresolvable, and that's the headline
+   *  - every checked asset failing means the same thing in practice --
+   *    the prefix moved or the bucket went away
+   *  - a few assets failing out of many is a different, smaller problem
+   *
+   * Never enumerates individual assets. A dataset can list 10,000 tiles;
+   * listing even the failing ones defeats the point of a scannable table
+   * (and is how the original 11 KB comment happened). One representative
+   * status plus a count is what a maintainer needs to decide whether to
+   * look.
+   */
+  const describeFailures = (id, meta) => {
+    if (meta.parseError) return "manifest failed to parse";
+    const failed = failuresByDataset.get(id) ?? [];
+    if (failed.length === 0) return "unknown";
+
+    // Group by reason so "all 25 → HTTP 404" doesn't get reported as
+    // "HTTP 404 (+24 more)" when the 24 are the same thing.
+    const reasonOf = (f) => (f.result?.error ? f.result.error : `HTTP ${f.result?.status}`);
+    const reasons = new Map();
+    for (const f of failed) reasons.set(reasonOf(f), (reasons.get(reasonOf(f)) ?? 0) + 1);
+    const topReason = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const reasonSuffix = reasons.size > 1 ? ` (+${reasons.size - 1} other error type(s))` : "";
+
+    const CRITICAL = new Set(["ept_source", "stac_item", "external_source"]);
+    const criticals = failed.filter((f) => CRITICAL.has(f.label));
+    if (criticals.length > 0) {
+      return `**source unreachable** — \`${criticals[0].label}\` → ${reasonOf(criticals[0])}`;
     }
-    lines.push(`| ${datasetLink} | ❌ | ${manifestLink} | ${maintainer} | ${detail} |`);
+
+    // Assets compared against assets -- see sampledAssets' own comment.
+    const checkedAssets = meta.sampledAssets ?? failed.length;
+    if (failed.length === 1) {
+      return `1 asset (\`${failed[0].label}\`) → ${topReason}`;
+    }
+    if (failed.length >= checkedAssets && checkedAssets > 1) {
+      return `**all ${checkedAssets} checked asset(s)** → ${topReason}${reasonSuffix}`;
+    }
+    return `${failed.length} of ${checkedAssets} checked asset(s) → ${topReason}${reasonSuffix}`;
+  };
+
+  // Grouped by owner: one subsection and table per maintainer, rather
+  // than a single flat table sorted somehow. At 1000s of datasets a
+  // maintainer's real question is "what of MINE is broken", and a shared
+  // table forces them to scan a Maintainer column to answer it. The
+  // Maintainer column is therefore gone -- the heading carries it.
+  //
+  // Most-affected owner first, matching the Notifications order below.
+  const tableByOwner = new Map();
+  for (const id of brokenIds) {
+    const owner = byId.get(id)?.owner ?? null;
+    if (!tableByOwner.has(owner)) tableByOwner.set(owner, []);
+    tableByOwner.get(owner).push(id);
+  }
+  const orderedOwnerGroups = [...tableByOwner.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  let rowsEmitted = 0;
+  for (const [owner, ids] of orderedOwnerGroups) {
+    if (rowsEmitted >= MAX_ROWS) break;
+    lines.push("");
+    lines.push(`#### ${owner ? `@${owner}` : "No maintainer recorded"} — ${ids.length} unreachable`);
+    lines.push("");
+    lines.push("| Dataset | Reachability | Manifest | Failing |");
+    lines.push("| --- | :---: | --- | --- |");
+    for (const id of ids) {
+      if (rowsEmitted >= MAX_ROWS) break;
+      const meta = byId.get(id) ?? { id, file: "(unknown)", owner: null };
+      const datasetLink = `[\`${id}\`](${SITE_BASE_URL}/datasets/${encodeURIComponent(id)}/)`;
+      const manifestLink = `[\`${meta.file}\`](https://github.com/${REPO_SLUG}/blob/${REF_NAME}/${meta.file})`;
+      lines.push(`| ${datasetLink} | ❌ | ${manifestLink} | ${describeFailures(id, meta)} |`);
+      rowsEmitted += 1;
+    }
   }
   if (brokenIds.length > MAX_ROWS) {
     lines.push("");
