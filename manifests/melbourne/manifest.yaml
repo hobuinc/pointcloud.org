@@ -15,6 +15,7 @@ providers:
     contact:
       name: Howard Butler
       email: howard@hobu.co
+      github_owner: hobu
 extent:
   temporal:
     interval:

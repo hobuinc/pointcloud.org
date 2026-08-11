@@ -276,6 +276,16 @@ jobs:
       - name: Check dataset.federate
         id: check
         run: echo "federate=$(node scripts/check-federate.mjs ${{ needs.changed.outputs.manifest_files }})" >> "$GITHUB_OUTPUT"
+      # Hard gate, not advisory: `federate: true` is the one field that
+      # makes this project copy submitter-specified URLs into its own
+      # bucket and republish them under its own domain, so the files
+      # being copied have to be recognized point-cloud/raster formats.
+      # Fails the check (rather than warning) precisely because a PR that
+      # gets this wrong must not be mergeable. See the script's own doc
+      # comment for why this is extension-based and why ept_source is
+      # excluded.
+      - name: Enforce the federation format allowlist
+        run: node scripts/check-federate-extensions.mjs ${{ needs.changed.outputs.manifest_files }}
 
   # Dry-run counterpart to dispatch-ingest below -- fires on every push
   # to an open PR (not just merge), so a contributor gets real feedback

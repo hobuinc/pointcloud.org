@@ -1,0 +1,257 @@
+# `@pointcloud-org, please ...` command handler.
+#
+# Modelled directly on conda-forge's `@conda-forge-admin, please ...`
+# service (see CONDA-FORGE-GAP-ANALYSIS.md in the infrastructure repo).
+# The point of the pattern is that it needs no special UI and no special
+# permission to *ask*: anyone who can comment can invoke a command, which
+# is strictly more accessible than the `reingest` label -- applying a
+# label requires triage access, so before this existed only maintainers
+# could trigger anything at all.
+#
+# Invocable from:
+#   - a comment on any issue or pull request
+#   - the body of a newly-opened issue
+#   - the title of a newly-opened issue
+#
+# Commands (see the help text in the "Parse" step, which is the single
+# source of truth users get shown):
+#   @pointcloud-org, please reingest <DATASET_ID>
+#   @pointcloud-org, please refresh-stac
+#   @pointcloud-org, please check-reachability
+#
+# ## Permissions
+#
+# Every command here has real side effects -- opening PRs, spending
+# container time, rewriting archive-wide STAC artifacts -- so all of them
+# require the commenter to have write or admin permission on this repo,
+# checked against the live collaborator-permission API rather than
+# inferred from `author_association` (which reports MEMBER/OWNER based on
+# org visibility and is not a reliable authorization signal).
+#
+# A comment from someone without permission gets a polite reply
+# explaining that, rather than silently doing nothing -- silence is
+# indistinguishable from a broken bot.
+#
+# ## Why `issue_comment` is safe here
+#
+# `issue_comment` always runs from the default branch and has access to
+# secrets, which is the same footgun class as `pull_request_target`. This
+# workflow never checks out or executes PR head content: it reads
+# manifests from `main` and shells out to `gh`. The one place untrusted
+# input reaches a command is the dataset id, which is validated against a
+# strict character allowlist and then confirmed to be an existing
+# directory on `main` before use.
+name: Commands
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened]
+
+jobs:
+  command:
+    # Cheap pre-filter so the vast majority of comments never start a
+    # runner. The real parse happens in the job.
+    if: |
+      contains(github.event.comment.body, '@pointcloud-org, please') ||
+      contains(github.event.issue.body, '@pointcloud-org, please') ||
+      contains(github.event.issue.title, '@pointcloud-org, please')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      # Same dedicated bot account used by reingest.yml and the
+      # cross-repo dispatch calls -- see that workflow's own comment for
+      # why this isn't the default GITHUB_TOKEN.
+      GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      SENDER: ${{ github.event.comment.user.login || github.event.issue.user.login }}
+    steps:
+      # Immediate acknowledgement, before any work starts. conda-forge
+      # reacts with 🚀 for exactly this reason: it tells the user the bot
+      # saw them, which is information they need well before the outcome
+      # comment can exist.
+      - name: React to acknowledge the command
+        continue-on-error: true
+        run: |
+          if [ -n "${{ github.event.comment.id }}" ]; then
+            gh api -X POST "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+              -f content=rocket --silent || true
+          else
+            gh api -X POST "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/reactions" \
+              -f content=rocket --silent || true
+          fi
+
+      - name: Verify the requester has write access
+        id: auth
+        run: |
+          LEVEL=$(gh api "repos/${{ github.repository }}/collaborators/${SENDER}/permission" --jq .permission 2>/dev/null || echo none)
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+          echo "Requester ${SENDER} has permission: $LEVEL"
+          if [ "$LEVEL" != "write" ] && [ "$LEVEL" != "admin" ] && [ "$LEVEL" != "maintain" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "@${SENDER} — these commands change published data (they open pull requests, rebuild archive-wide STAC indexes, or spend build time), so they're limited to accounts with write access on this repository.
+
+          If you'd like something re-ingested or re-checked, say so in a comment and a maintainer can run it for you. If you maintain a dataset here and should have access, mention it and we'll sort that out."
+            echo "unauthorized=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.auth.outputs.unauthorized != 'true'
+        with:
+          persist-credentials: false
+
+      - name: Parse the command
+        id: parse
+        if: steps.auth.outputs.unauthorized != 'true'
+        env:
+          # Via env, never interpolated into the script body -- a comment
+          # is attacker-controlled text and `${{ }}` interpolation would
+          # splice it straight into bash.
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          TEXT="$COMMENT_BODY
+          $ISSUE_BODY
+          $ISSUE_TITLE"
+
+          # First matching command wins. Tolerant of the comma and of
+          # extra whitespace, case-insensitive on the verb.
+          VERB=""
+          ARG=""
+          if echo "$TEXT" | grep -qiE '@pointcloud-org,?[[:space:]]+please[[:space:]]+reingest'; then
+            VERB=reingest
+            ARG=$(echo "$TEXT" | grep -oiE '@pointcloud-org,?[[:space:]]+please[[:space:]]+reingest[[:space:]]+[^[:space:]`"]+' | head -n1 | awk '{print $NF}')
+          elif echo "$TEXT" | grep -qiE '@pointcloud-org,?[[:space:]]+please[[:space:]]+refresh-stac'; then
+            VERB=refresh-stac
+          elif echo "$TEXT" | grep -qiE '@pointcloud-org,?[[:space:]]+please[[:space:]]+check-reachability'; then
+            VERB=check-reachability
+          fi
+
+          echo "verb=$VERB" >> "$GITHUB_OUTPUT"
+          echo "arg=$ARG" >> "$GITHUB_OUTPUT"
+          echo "Parsed verb='$VERB' arg='$ARG'"
+
+          if [ -z "$VERB" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "I couldn't tell which command you meant. Supported commands:
+
+          - \`@pointcloud-org, please reingest <DATASET_ID>\` — re-run ingest for one dataset. Opens a pull request for an admin to merge; the ingest happens on merge.
+          - \`@pointcloud-org, please refresh-stac\` — rebuild the archive-wide STAC catalog, collections manifest, and the single-file \`items.parquet\`.
+          - \`@pointcloud-org, please check-reachability\` — check every dataset's external URLs and report anything unreachable.
+
+          Dataset ids are directory names under \`manifests/\` (for grouped datasets, just the leaf, e.g. \`MN_SEDriftless_3_2021\`)."
+          fi
+
+      # ----- reingest <DATASET_ID> -----
+      - name: reingest
+        if: steps.auth.outputs.unauthorized != 'true' && steps.parse.outputs.verb == 'reingest'
+        env:
+          DATASET_ID: ${{ steps.parse.outputs.arg }}
+        run: |
+          set -e
+          # Strict allowlist. DATASET_ID comes from a comment, and is
+          # about to be used in paths and git refs.
+          if ! echo "$DATASET_ID" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            gh issue comment "$ISSUE_NUMBER" --body "\`$DATASET_ID\` doesn't look like a dataset id. Ids are directory names under \`manifests/\` — letters, digits, dots, dashes and underscores only."
+            exit 1
+          fi
+
+          # Resolve the id to a real manifest on main, at any nesting
+          # depth (datasets may live under a grouping directory such as
+          # manifests/usgs-3dep/<id>/).
+          FILE=$(find manifests -type d -name "$DATASET_ID" -print -quit)/manifest.yaml
+          if [ ! -f "$FILE" ]; then
+            AVAILABLE=$(find manifests -name manifest.yaml | sed 's|manifests/||; s|/manifest.yaml||' | sed 's|.*/||' | sort | head -20 | tr '\n' ' ')
+            gh issue comment "$ISSUE_NUMBER" --body "No dataset called \`$DATASET_ID\` exists on \`main\`. Some ids that do: $AVAILABLE …"
+            exit 1
+          fi
+
+          BRANCH="reingest-${DATASET_ID}-$(date -u +%Y%m%d%H%M%S)"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git config user.name "pointcloud-org"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          echo "# reingest requested by @${SENDER} via command in #${ISSUE_NUMBER} on $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$FILE"
+          git add "$FILE"
+          git commit -m "Reingest ${DATASET_ID} (requested by @${SENDER} in #${ISSUE_NUMBER})"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "Reingest ${DATASET_ID}" \
+            --body "Requested by @${SENDER} via \`@pointcloud-org, please reingest ${DATASET_ID}\` in #${ISSUE_NUMBER}.
+
+          No content change — just a re-touch of \`${FILE}\` so merging re-runs ingest for \`${DATASET_ID}\`.
+
+          **This PR needs an admin to merge it.** Merging is what fires the ingest; this PR's own checks are the gate." \
+            --base main --head "$BRANCH")
+          gh pr edit "$PR_URL" --add-label reingest || true
+          gh issue comment "$ISSUE_NUMBER" --body "🔄 Opened $PR_URL to re-ingest \`${DATASET_ID}\`.
+
+          **An admin needs to merge it** — nothing is re-ingested until it lands, and the checks on that PR are the gate."
+
+      # ----- refresh-stac -----
+      # Dispatched to the infrastructure repo rather than run here: the
+      # rebuild endpoints need WORKER_INGEST_SHARED_SECRET, which this
+      # public repo deliberately does not hold (see manifest-ingest.yml's
+      # header). Same trust boundary as dispatch-ingest.
+      - name: refresh-stac
+        if: steps.auth.outputs.unauthorized != 'true' && steps.parse.outputs.verb == 'refresh-stac'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "admin-command",
+              client_payload: {
+                command: "refresh-stac",
+                issueNumber: Number(process.env.ISSUE_NUMBER),
+                requestedBy: process.env.SENDER,
+              },
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE_NUMBER),
+              body:
+                "🔄 Rebuilding the archive-wide STAC artifacts: root `catalog.json`, `collections.json`, and the " +
+                "single-file `items.parquet`. This runs on the infrastructure side and takes a minute or two for " +
+                "the parquet merge; I'll report back here when it finishes.",
+            });
+
+      # ----- check-reachability -----
+      # Runs here, not on the infrastructure side: checking whether a
+      # public URL resolves needs no credentials at all (that's why
+      # check-reachability.mjs lives in this repo and runs on every PR),
+      # so there's no reason to cross the trust boundary for it.
+      - name: check-reachability
+        if: steps.auth.outputs.unauthorized != 'true' && steps.parse.outputs.verb == 'check-reachability'
+        run: |
+          set +e
+          npm install --no-audit --no-fund >/dev/null 2>&1
+          MANIFESTS=$(find manifests -name manifest.yaml | sort | tr '\n' ' ')
+          COUNT=$(echo "$MANIFESTS" | wc -w)
+          echo "Checking $COUNT manifest(s)..."
+          OUTPUT=$(node scripts/check-reachability.mjs $MANIFESTS 2>&1)
+          STATUS=$?
+          set -e
+          {
+            if [ "$STATUS" -eq 0 ]; then
+              echo "✅ Reachability check passed — every external URL across all ${COUNT} dataset(s) resolved."
+            else
+              echo "⚠️ Reachability check found problems across ${COUNT} dataset(s)."
+            fi
+            echo ""
+            echo "<details><summary>Full output</summary>"
+            echo ""
+            echo '```'
+            echo "$OUTPUT" | tail -c 55000
+            echo '```'
+            echo ""
+            echo "</details>"
+          } > /tmp/reach.md
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/reach.md
+          exit "$STATUS"

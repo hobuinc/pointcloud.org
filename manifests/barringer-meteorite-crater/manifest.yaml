@@ -23,6 +23,7 @@ providers:
     contact:
       name: Howard Butler
       email: howard@hobu.co
+      github_owner: hobu
 links:
 - rel: cite-as
   href: https://doi.org/10.5069/G9V40S4C
