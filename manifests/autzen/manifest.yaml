@@ -16,6 +16,22 @@ description: >
   unclassified point cloud and full acquisition details.
 license: CC-BY-4.0
 keywords: [oregon, sample-data, pdal, university-of-oregon]
+
+# The source LAS header carries no creation date, so `pdal info --stac` reports
+# year 1 for this Item. That is not a cosmetic wart: the value flowed into this
+# Collection's temporal extent, pystac raises ValueError parsing it, and because
+# listing collections parses every Collection, this one dataset made the whole
+# archive unlistable for every pystac-based client -- an ArcGIS Pro user
+# reported exactly that on 2026-08-12. The ingest pipeline now drops unusable
+# dates rather than publishing them, which leaves this dataset dateless unless
+# the manifest supplies the date. It can: the survey year is documented in the
+# description above and in PDAL/data's own acquisition details. Stated as a
+# whole-year interval rather than a false instant, because the year is all that
+# is actually known.
+extent:
+  temporal:
+    interval:
+      - ["2010-01-01", "2010-12-31"]
 providers:
   - name: Watershed Sciences, Inc.
     roles: [producer]
