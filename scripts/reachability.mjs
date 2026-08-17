@@ -92,6 +92,27 @@ const DATA_BASE_URL = process.env.DATA_PUBLIC_BASE_URL ?? "https://data.pointclo
  */
 const MAX_PR_COMMENTS = Number(process.env.MAX_PR_COMMENTS ?? 25);
 
+/**
+ * The three kinds of URL a manifest names, and why the difference decides
+ * whether a human gets woken up.
+ *
+ *  - SOURCE: `ept_source`/`stac_item`/`external_source`. One of these failing
+ *    means the dataset cannot be resolved at all.
+ *  - DOC: the `license` and `about` links. Provenance for humans. Worth
+ *    reporting -- a dead license link is real drift in the manifest -- but the
+ *    data is untouched, so it must not mark the dataset unreachable, fail the
+ *    sweep, or comment on anyone's pull request.
+ *  - asset: everything else, i.e. the actual data.
+ *
+ * Conflating the last two is what made the 2026-08-17 sweeps cry wolf: `autzen`
+ * is hosted in our own storage and perfectly readable, and was reported
+ * unreachable because github.com answered 503 to a runner asking about its
+ * license page. It also produced the nonsense "2 of 1 checked asset(s)",
+ * because link failures were counted against a denominator that excluded them.
+ */
+const SOURCE_LABELS = new Set(["ept_source", "stac_item", "external_source"]);
+const isDocLabel = (label) => label === "links.license" || label === "links.about";
+
 const GH_API = "https://api.github.com";
 const GH_TOKEN = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
 
@@ -191,7 +212,11 @@ async function loadDatasets() {
       // failures against sampledUrls (which includes the license/about/
       // ept_source criticals) undercounts and reports "23 of 25" when
       // every asset it checked was in fact broken.
-      sampledAssets: sampled.length - critical.length,
+      // Assets only: excludes both the criticals and the license/about links,
+      // so "N of M checked asset(s)" compares like with like. Counting links
+      // in the denominator (or, worse, in the numerator only) is how a report
+      // came to read "2 of 1".
+      sampledAssets: sampled.filter((u) => !SOURCE_LABELS.has(u.label) && !isDocLabel(u.label)).length,
       urls: sampled,
     });
   }
@@ -526,10 +551,15 @@ if (mode === "report") {
   }
 
   const byId = new Map(datasetMeta.map((d) => [d.id, d]));
+
+  // Data failures decide the sweep's verdict; documentation-link failures are
+  // reported separately and decide nothing. See SOURCE_LABELS/isDocLabel.
   const failuresByDataset = new Map();
+  const docFailuresByDataset = new Map();
   for (const f of failures) {
-    if (!failuresByDataset.has(f.datasetId)) failuresByDataset.set(f.datasetId, []);
-    failuresByDataset.get(f.datasetId).push(f);
+    const bucket = isDocLabel(f.label) ? docFailuresByDataset : failuresByDataset;
+    if (!bucket.has(f.datasetId)) bucket.set(f.datasetId, []);
+    bucket.get(f.datasetId).push(f);
   }
   const parseErrors = datasetMeta.filter((d) => d.parseError);
 
@@ -541,10 +571,14 @@ if (mode === "report") {
   const sampled = totalUrls > checked;
 
   const lines = [];
+  const docNote =
+    docFailuresByDataset.size > 0
+      ? ` ${docFailuresByDataset.size} documentation link(s) also failed — see below; they do not affect the data.`
+      : "";
   lines.push(
     brokenIds.length === 0
-      ? `✅ **Reachability verified** — every checked URL resolved, as of ${stamp}.`
-      : `⚠️ **Reachability: ${brokenIds.length} dataset(s) unreachable**, as of ${stamp}.`,
+      ? `✅ **Reachability verified** — every dataset's data resolved, as of ${stamp}.${docNote}`
+      : `⚠️ **Reachability: ${brokenIds.length} dataset(s) unreachable**, as of ${stamp}.${docNote}`,
   );
   lines.push("");
   lines.push("| Category | Datasets | URLs checked |");
@@ -562,8 +596,37 @@ if (mode === "report") {
     lines.push("");
   }
 
+  // Documentation links, reported either way -- as an advisory when nothing
+  // else is wrong, and alongside the real breakage when there is some.
+  const docLines = [];
+  if (docFailuresByDataset.size > 0) {
+    docLines.push("");
+    docLines.push(`#### Documentation links — ${docFailuresByDataset.size} dataset(s)`);
+    docLines.push("");
+    docLines.push(
+      "_A `license` or `about` link that no longer resolves. The data itself is unaffected, so this does not " +
+        "fail the sweep or notify anyone — fix it whenever the manifest is next touched._",
+    );
+    docLines.push("");
+    docLines.push("| Dataset | Link | Result |");
+    docLines.push("| --- | --- | --- |");
+    for (const [id, failed] of [...docFailuresByDataset.entries()].slice(0, MAX_ROWS)) {
+      for (const f of failed) {
+        const reason = f.result?.error ? f.result.error : `HTTP ${f.result?.status}`;
+        const attempts = f.result?.attempts > 1 ? ` (${f.result.attempts} attempts)` : "";
+        docLines.push(`| \`${id}\` | [\`${f.label}\`](${f.href}) | ${reason}${attempts} |`);
+      }
+    }
+  }
+
   if (brokenIds.length === 0) {
-    if (arg("json")) writeFileSync(arg("json"), JSON.stringify({ ok: true, stamp, rows: [] }, null, 2) + "\n");
+    lines.push(...docLines);
+    if (arg("json")) {
+      writeFileSync(
+        arg("json"),
+        JSON.stringify({ ok: true, stamp, rows: [], documentationWarnings: docFailuresByDataset.size }, null, 2) + "\n",
+      );
+    }
     process.stdout.write(lines.join("\n") + "\n");
     process.exit(0);
   }
@@ -615,8 +678,10 @@ if (mode === "report") {
       return `**source unreachable** — \`${criticals[0].label}\` → ${reasonOf(criticals[0])}`;
     }
 
-    // Assets compared against assets -- see sampledAssets' own comment.
-    const checkedAssets = meta.sampledAssets ?? failed.length;
+    // Assets compared against assets -- see sampledAssets' own comment. Clamped
+    // so the denominator can never be smaller than the numerator: a report that
+    // says "2 of 1" tells the reader the sweep is broken, not the dataset.
+    const checkedAssets = Math.max(meta.sampledAssets ?? failed.length, failed.length);
     if (failed.length === 1) {
       return `1 asset (\`${failed[0].label}\`) → ${topReason}`;
     }
@@ -717,6 +782,8 @@ if (mode === "report") {
     );
   }
 
+  lines.push(...docLines);
+
   lines.push("");
   lines.push("**What to do about it**");
   lines.push("");
@@ -753,6 +820,60 @@ if (mode === "report") {
 
   process.stdout.write(lines.join("\n") + "\n");
   process.exit(1);
+}
+
+// ------------------------------------------------------------ withdraw
+//
+// Retracts a drift comment the sweep should not have posted. Its own mode
+// rather than a flag on `notify`, because the run that retracts is by
+// definition one whose report is clean -- there is no plan listing the dataset
+// any more, so the PR has to be resolved from scratch.
+//
+// Comments are edited, never deleted: a false alarm that silently vanishes
+// teaches nobody anything, and whoever read it deserves to see the correction
+// in the same place.
+if (mode === "withdraw") {
+  const ids = (arg("ids") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (ids.length === 0) {
+    console.error("withdraw: --ids <dataset,dataset> is required");
+    process.exit(2);
+  }
+  const dryRun = process.argv.includes("--dry-run");
+  const datasets = await loadDatasets();
+  const byId = new Map(datasets.map((d) => [d.id, d]));
+  const pullRequests = await resolvePullRequests(ids, byId);
+
+  for (const id of ids) {
+    const pr = pullRequests.get(id);
+    if (!pr?.number) {
+      console.log(`withdraw: no pull request found for "${id}" -- nothing to retract`);
+      continue;
+    }
+    const marker = `<!-- upstream-drift:${id} -->`;
+    const body = [
+      marker,
+      `✅ **Retracted:** the earlier drift report for \`${id}\` was a false alarm — its data is reachable.`,
+      "",
+      "The sweep was counting a failing `license`/`about` link (documentation, not data) as the dataset being " +
+        "unreachable, and the doc hosts in question rate-limit CI runners. Documentation links are now reported " +
+        "in their own advisory section and never notify anyone. Sorry for the noise.",
+    ].join("\n");
+
+    if (dryRun) {
+      console.log(`--- would retract on #${pr.number} for ${id}`);
+      console.log(body);
+      continue;
+    }
+    const existing = await gh(`/repos/${REPO_SLUG}/issues/${pr.number}/comments?per_page=100`);
+    const mine = (Array.isArray(existing) ? existing : []).find((c) => (c.body ?? "").includes(marker));
+    if (!mine) {
+      console.log(`withdraw: no sweep comment found on #${pr.number} for "${id}"`);
+      continue;
+    }
+    const ok = await gh(`/repos/${REPO_SLUG}/issues/comments/${mine.id}`, { method: "PATCH", body: { body } });
+    console.log(`withdraw: ${ok ? "retracted" : "FAILED to retract"} comment on #${pr.number} for ${id}`);
+  }
+  process.exit(0);
 }
 
 // -------------------------------------------------------------- notify
@@ -837,6 +958,7 @@ if (mode === "notify") {
 
 console.error(
   `usage: reachability.mjs plan --shards N | check --shard I --shards N [--out FILE] | ` +
-    `report --results DIR [--json FILE] [--no-pr-lookup] | notify --plan FILE [--dry-run]`,
+    `report --results DIR [--json FILE] [--no-pr-lookup] | ` +
+    `notify --plan FILE [--dry-run] | withdraw --ids id,id [--dry-run]`,
 );
 process.exit(2);
