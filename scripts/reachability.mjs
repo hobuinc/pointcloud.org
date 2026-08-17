@@ -415,6 +415,27 @@ async function headOnce(href) {
  * timeouts, 429, and 5xx. A 404 is an answer: the server was reached and said
  * the thing is not there, so retrying it just slows the sweep down.
  */
+/**
+ * Finds this sweep's own comment on a pull request, if it can.
+ *
+ * Returns `{ comment }` when found, `{ comment: null }` when the PR provably
+ * has none, and `{ readable: false }` when the token cannot read comments at
+ * all -- a distinction that matters, because "no comment found" and "not
+ * allowed to look" call for opposite behaviour.
+ *
+ * Observed with the token this workflow runs as: POST to
+ * `/issues/{n}/comments` on a pull request succeeds while GET on the same path
+ * answers 404. Rather than assert which permission bit explains that, callers
+ * treat unreadable as "append a new comment" -- worst case a second comment,
+ * which is visible and harmless, instead of a silent no-op that looks like
+ * success. Idempotent editing resumes automatically wherever the read works.
+ */
+async function findSweepComment(prNumber, marker) {
+  const existing = await gh(`/repos/${REPO_SLUG}/issues/${prNumber}/comments?per_page=100`);
+  if (!Array.isArray(existing)) return { readable: false, comment: null };
+  return { readable: true, comment: existing.find((c) => (c.body ?? "").includes(marker)) ?? null };
+}
+
 async function head(href) {
   const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 509, 522, 524]);
   let last;
@@ -864,14 +885,21 @@ if (mode === "withdraw") {
       console.log(body);
       continue;
     }
-    const existing = await gh(`/repos/${REPO_SLUG}/issues/${pr.number}/comments?per_page=100`);
-    const mine = (Array.isArray(existing) ? existing : []).find((c) => (c.body ?? "").includes(marker));
-    if (!mine) {
-      console.log(`withdraw: no sweep comment found on #${pr.number} for "${id}"`);
+    const { readable, comment: mine } = await findSweepComment(pr.number, marker);
+    if (readable && !mine) {
+      console.log(`withdraw: no sweep comment on #${pr.number} for "${id}" -- nothing to retract`);
       continue;
     }
-    const ok = await gh(`/repos/${REPO_SLUG}/issues/comments/${mine.id}`, { method: "PATCH", body: { body } });
-    console.log(`withdraw: ${ok ? "retracted" : "FAILED to retract"} comment on #${pr.number} for ${id}`);
+    // Unreadable comments: post the retraction instead of editing. A visible
+    // correction beats a silent failure, which is what the first attempt at
+    // this did -- it reported "no sweep comment found" for two comments that
+    // were plainly there on the PR.
+    const ok = mine
+      ? await gh(`/repos/${REPO_SLUG}/issues/comments/${mine.id}`, { method: "PATCH", body: { body } })
+      : await gh(`/repos/${REPO_SLUG}/issues/${pr.number}/comments`, { method: "POST", body: { body } });
+    console.log(
+      `withdraw: ${ok ? (mine ? "retracted (edited)" : "retracted (new comment)") : "FAILED to retract"} on #${pr.number} for ${id}`,
+    );
   }
   process.exit(0);
 }
@@ -938,8 +966,8 @@ if (mode === "notify") {
       continue;
     }
 
-    const existing = await gh(`/repos/${REPO_SLUG}/issues/${row.pullRequest.number}/comments?per_page=100`);
-    const mine = (Array.isArray(existing) ? existing : []).find((c) => (c.body ?? "").includes(marker));
+    const { readable, comment: mine } = await findSweepComment(row.pullRequest.number, marker);
+    if (!readable) console.log(`notify: cannot read comments on #${row.pullRequest.number} -- posting a new one`);
     const result = mine
       ? await gh(`/repos/${REPO_SLUG}/issues/comments/${mine.id}`, { method: "PATCH", body: { body } })
       : await gh(`/repos/${REPO_SLUG}/issues/${row.pullRequest.number}/comments`, { method: "POST", body: { body } });
