@@ -43,6 +43,11 @@ on:
 permissions:
   contents: read
   issues: write
+  # Per-dataset drift comments land on pull requests. The comment itself goes
+  # through the PAT in GH_TOKEN below, but a PR comment is gated by
+  # `pull-requests`, not `issues`, and stating it here keeps the workflow
+  # working if it is ever switched to the default GITHUB_TOKEN.
+  pull-requests: write
 
 jobs:
   plan:
@@ -119,10 +124,60 @@ jobs:
         id: report
         run: |
           set +e
-          node scripts/reachability.mjs report --results shards > /tmp/report.md
+          node scripts/reachability.mjs report --results shards \
+            --json /tmp/drift.json > /tmp/report.md
           echo "status=$?" >> "$GITHUB_OUTPUT"
           set -e
           cat /tmp/report.md
+
+      # The run page is where anyone who clicks the failing check lands, so put
+      # the whole report there rather than making them open the tracking issue
+      # to find out what broke. Every dataset, manifest and PR in it is a link.
+      - name: Job summary
+        if: always()
+        run: |
+          # Both files are guarded: this step is `always()`, and a report step
+          # that died before writing them must not turn into a second, more
+          # confusing failure on top of the first.
+          {
+            echo "## Upstream drift sweep"
+            echo
+            if [ -s /tmp/report.md ]; then
+              cat /tmp/report.md
+            else
+              echo "⚠️ The report step produced nothing — see its log above."
+            fi
+            if [ -s /tmp/drift.json ]; then
+              echo
+              echo "<details><summary>Machine-readable report (drift.json)</summary>"
+              echo
+              echo '```json'
+              head -c 30000 /tmp/drift.json
+              echo '```'
+              echo
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Uploaded as well as summarised: the summary is for reading, this is for
+      # anything that wants to diff one week's drift against the next.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: drift-report
+          path: |
+            /tmp/report.md
+            /tmp/drift.json
+          retention-days: 30
+
+      # Report each broken dataset back to the pull request that last touched
+      # it, tagging the manifest's github_owner. Never fails the job: the
+      # tracking issue below is the authoritative record, and a courtesy ping
+      # that could not be delivered is not a sweep failure.
+      - name: Comment on each dataset's last active pull request
+        if: steps.report.outputs.status != '0'
+        continue-on-error: true
+        run: node scripts/reachability.mjs notify --plan /tmp/drift.json
 
       - name: Open, update, or close the tracking issue
         run: |
@@ -131,10 +186,20 @@ jobs:
           gh label create "$LABEL" --color "b60205" \
             --description "Upstream data drift detected by the weekly sweep" 2>/dev/null || true
 
+          # `.[0] | "\(.number) \(.state)"` on an empty list renders the string
+          # "null null" -- jq interpolates null happily -- so the first sweep
+          # after this label is created read NUM="null" and died on
+          # `gh issue edit null` with "invalid issue format". `// empty` makes
+          # an absent issue an empty string, and the numeric guard below means
+          # anything else unexpected degrades to "open a new issue" rather than
+          # failing the run.
           EXISTING=$(gh issue list --label "$LABEL" --state all --limit 1 --json number,state \
-            --jq '.[0] | "\(.number) \(.state)"' 2>/dev/null || echo "")
+            --jq '.[0] // empty | "\(.number) \(.state)"' 2>/dev/null || echo "")
           NUM=$(echo "$EXISTING" | awk '{print $1}')
           STATE=$(echo "$EXISTING" | awk '{print $2}')
+          case "$NUM" in
+            ''|*[!0-9]*) NUM="" ;;
+          esac
 
           if [ "${{ steps.report.outputs.status }}" = "0" ]; then
             if [ -n "$NUM" ] && [ "$STATE" = "OPEN" ]; then

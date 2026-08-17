@@ -610,6 +610,23 @@ Comment on any issue or pull request:
   runs on its own every Monday, filing or updating a single
   `upstream-drift` tracking issue.
 
+  A URL is only believed broken after it fails a retry: network errors,
+  timeouts, 429s and 5xx get up to three attempts, while a 404 is taken at
+  its word. Reports say how many attempts a failure took, so a persistent
+  breakage reads differently from a blip.
+
+  Alongside the tracking issue, each broken dataset gets a comment on the
+  pull request that last touched it, tagging that manifest's
+  `github_owner`. The sweep finds that pull request from
+  `pointcloud_org:ingest` on the dataset's published STAC Collection —
+  recorded at ingest, since that is the only point that knows for certain
+  which PR produced the current state — and falls back to the manifest
+  directory's own commit history for datasets ingested before that field
+  existed. An open pull request touching the dataset wins over the
+  original one, on the grounds that a fix in progress is where the
+  conversation already is. Comments are capped per sweep and edited in
+  place week to week, rather than stacking up.
+
 Note that the per-PR reachability check is exhaustive, unlike the sweep:
 when you open a pull request, every foreign URL your manifest names is
 fetched.

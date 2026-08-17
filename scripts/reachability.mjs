@@ -56,6 +56,10 @@ const CONCURRENCY = 8;
 /** Per-request timeout. Some USGS endpoints are slow rather than dead, and a false "broken" is worse than a slow sweep. */
 const TIMEOUT_MS = 20_000;
 
+/** Extra attempts for a URL that failed in a way that might be transient. See head(). */
+const RETRIES = Number(process.env.REACHABILITY_RETRIES ?? 2);
+const RETRY_BACKOFF_MS = Number(process.env.REACHABILITY_RETRY_BACKOFF_MS ?? 1500);
+
 /**
  * Max URLs checked per dataset. See the "Why sampled" note above. Set
  * `SAMPLE_PER_DATASET=0` to check exhaustively (useful for a one-off
@@ -73,6 +77,23 @@ const REF_NAME = process.env.GITHUB_REF_NAME ?? "main";
 
 /** Cap on broken-dataset rows. A GitHub issue body is limited to 65536 chars, and an oversized body fails to post entirely. */
 const MAX_ROWS = 200;
+
+/** Where published STAC lives. `pointcloud_org:ingest` on a Collection records the PR that last ingested it. */
+const DATA_BASE_URL = process.env.DATA_PUBLIC_BASE_URL ?? "https://data.pointcloud.org";
+
+/**
+ * Cap on how many datasets get a PR comment in one sweep.
+ *
+ * A single upstream bucket reorganizing can break hundreds of datasets at
+ * once. The tracking issue is the exhaustive record; per-PR comments are a
+ * courtesy ping to the person who contributed each one, and several hundred
+ * of those in one minute is indistinguishable from spam (and would burn the
+ * token's secondary rate limit).
+ */
+const MAX_PR_COMMENTS = Number(process.env.MAX_PR_COMMENTS ?? 25);
+
+const GH_API = "https://api.github.com";
+const GH_TOKEN = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
 
 async function findManifests(dir) {
   const out = [];
@@ -184,7 +205,155 @@ function workList(datasets) {
   return work;
 }
 
-async function head(href) {
+/** GitHub API GET returning parsed JSON, or null on any failure. Best-effort by design: see resolvePullRequests(). */
+async function gh(pathname, { method = "GET", body = undefined } = {}) {
+  if (!GH_TOKEN) return null;
+  try {
+    const res = await fetch(`${GH_API}${pathname}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${GH_TOKEN}`,
+        accept: "application/vnd.github+json",
+        "user-agent": "pointcloud-org-drift-sweep",
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    if (!res.ok) {
+      console.error(`[gh] ${method} ${pathname} -> HTTP ${res.status}`);
+      return null;
+    }
+    return res.status === 204 ? {} : await res.json();
+  } catch (err) {
+    console.error(`[gh] ${method} ${pathname} threw: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * The pull request to report each broken dataset back to.
+ *
+ * A drift report is only useful if it reaches whoever contributed the
+ * dataset, and the place they are already subscribed to is the PR that added
+ * it -- or, better, whichever PR touching it is currently active. Three
+ * sources, most authoritative first:
+ *
+ *  1. `pointcloud_org:ingest.pull_request_number` on the dataset's published
+ *     STAC Collection. Written by the ingest pipeline, which is the only code
+ *     that knows for certain which PR produced the current state.
+ *  2. The PR(s) associated with the latest commit touching the dataset's
+ *     manifest directory. Covers everything ingested before (1) existed.
+ *  3. Any *open* PR that touches that directory. Fetched once for the whole
+ *     sweep rather than per dataset.
+ *
+ * Whichever candidate was updated most recently wins, so an open fix-in-
+ * progress beats the original ingest PR -- that is what "last active" means
+ * here, and it is where a comment does the most good.
+ *
+ * Entirely best-effort: every failure path yields "no PR" and the dataset
+ * still appears in the tracking issue. A sweep must never fail because a
+ * courtesy ping could not be addressed.
+ */
+async function resolvePullRequests(ids, byId) {
+  const resolved = new Map();
+  if (ids.length === 0) return resolved;
+
+  const candidates = new Map(); // id -> Map<number, {number, url, updatedAt, state, source}>
+  const remember = (id, pr, source) => {
+    if (!pr?.number) return;
+    if (!candidates.has(id)) candidates.set(id, new Map());
+    const existing = candidates.get(id).get(pr.number);
+    // Keep the first-recorded source: sources are consulted in priority order.
+    if (existing) return;
+    candidates.get(id).set(pr.number, {
+      number: pr.number,
+      url: pr.html_url ?? `https://github.com/${REPO_SLUG}/pull/${pr.number}`,
+      updatedAt: pr.updated_at ?? null,
+      state: pr.state ?? null,
+      source,
+    });
+  };
+
+  // (1) recorded provenance
+  await mapLimit(ids, 8, async (id) => {
+    try {
+      const res = await fetch(`${DATA_BASE_URL}/${encodeURIComponent(id)}/stac/collection.json`, {
+        headers: { "user-agent": "pointcloud-org-drift-sweep" },
+      });
+      if (!res.ok) return;
+      const collection = await res.json();
+      const ingest = collection?.["pointcloud_org:ingest"];
+      const number = Number(ingest?.pull_request_number);
+      if (Number.isInteger(number) && number > 0) {
+        const pr = await gh(`/repos/${REPO_SLUG}/pulls/${number}`);
+        remember(id, pr ?? { number }, "collection metadata");
+      }
+    } catch {
+      // A dataset whose collection.json is unreachable is itself news, but
+      // this function's only job is finding a PR.
+    }
+  });
+
+  // (2) history of the manifest directory -> the newest commit that came from
+  // a PR. Walks back rather than looking only at the tip: a maintainer fixing
+  // a typo directly on main leaves a commit with no PR at all, and the useful
+  // answer is still the PR that contributed the dataset. Two ways a commit
+  // names its PR, tried in order:
+  //
+  //   - the associated-PRs endpoint, which knows about merge commits
+  //   - the "(#123)" suffix GitHub's squash-merge writes into the subject,
+  //     which is the only trace left once a squash lands on main
+  await mapLimit(
+    ids.filter((id) => !candidates.has(id)),
+    4,
+    async (id) => {
+      const dir = path.posix.dirname(byId.get(id)?.file ?? `${MANIFEST_ROOT}/${id}/manifest.yaml`);
+      const commits = await gh(`/repos/${REPO_SLUG}/commits?path=${encodeURIComponent(dir)}&per_page=10`);
+      for (const commit of Array.isArray(commits) ? commits : []) {
+        const prs = await gh(`/repos/${REPO_SLUG}/commits/${commit.sha}/pulls?per_page=10`);
+        if (Array.isArray(prs) && prs.length > 0) {
+          for (const pr of prs) remember(id, pr, "manifest history");
+          return;
+        }
+        const squashed = /\(#(\d+)\)\s*$/m.exec((commit.commit?.message ?? "").split("\n")[0]);
+        if (squashed) {
+          const pr = await gh(`/repos/${REPO_SLUG}/pulls/${squashed[1]}`);
+          if (pr?.number) {
+            remember(id, pr, "squash-merge subject");
+            return;
+          }
+        }
+      }
+    },
+  );
+
+  // (3) open PRs touching a broken dataset, fetched once for the whole sweep
+  const open = await gh(`/repos/${REPO_SLUG}/pulls?state=open&per_page=100&sort=updated&direction=desc`);
+  const brokenSet = new Set(ids);
+  for (const pr of (Array.isArray(open) ? open : []).slice(0, 50)) {
+    const files = await gh(`/repos/${REPO_SLUG}/pulls/${pr.number}/files?per_page=100`);
+    for (const file of Array.isArray(files) ? files : []) {
+      const match = /^manifests\/(?:.+\/)?([^/]+)\/[^/]+$/.exec(file.filename ?? "");
+      const touched = match?.[1];
+      if (touched && brokenSet.has(touched)) remember(touched, pr, "open pull request");
+    }
+  }
+
+  for (const [id, byNumber] of candidates) {
+    const best = [...byNumber.values()].sort((a, b) => {
+      // Most recently updated first; an open PR breaks a tie against a merged
+      // one, since that is where the conversation is actually happening.
+      const stateRank = (pr) => (pr.state === "open" ? 1 : 0);
+      if (stateRank(b) !== stateRank(a)) return stateRank(b) - stateRank(a);
+      return String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""));
+    })[0];
+    if (best) resolved.set(id, best);
+  }
+  return resolved;
+}
+
+/** One attempt: HEAD, falling back to a ranged GET for hosts that refuse HEAD. */
+async function headOnce(href) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -205,6 +374,35 @@ async function head(href) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Reachability of one URL, retried before it is believed.
+ *
+ * A single attempt is not evidence. The 2026-08-17 sweep reported `hk-2020`
+ * unreachable on one `TypeError: fetch failed` against data.gov.hk, which
+ * answered 200 on the next try from elsewhere -- a runner-side network blip,
+ * not drift. That was already bad (it opens a tracking issue and names a
+ * maintainer); now that a failure also comments on that maintainer's pull
+ * request, crying wolf is expensive enough to spend a few seconds avoiding.
+ *
+ * Retries only what can plausibly be transient -- network/DNS/TLS errors,
+ * timeouts, 429, and 5xx. A 404 is an answer: the server was reached and said
+ * the thing is not there, so retrying it just slows the sweep down.
+ */
+async function head(href) {
+  const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 509, 522, 524]);
+  let last;
+  for (let attempt = 0; attempt < RETRIES + 1; attempt += 1) {
+    last = await headOnce(href);
+    if (last.ok) return attempt === 0 ? last : { ...last, retries: attempt };
+    const transient = last.status === 0 || RETRYABLE_STATUS.has(last.status);
+    if (!transient) return last;
+    if (attempt < RETRIES) await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS * (attempt + 1)));
+  }
+  // Kept as the reason a maintainer sees, with the attempt count so a
+  // "failed 3 times" report reads differently from a one-off.
+  return { ...last, attempts: RETRIES + 1 };
 }
 
 async function mapLimit(items, limit, fn) {
@@ -365,9 +563,15 @@ if (mode === "report") {
   }
 
   if (brokenIds.length === 0) {
+    if (arg("json")) writeFileSync(arg("json"), JSON.stringify({ ok: true, stamp, rows: [] }, null, 2) + "\n");
     process.stdout.write(lines.join("\n") + "\n");
     process.exit(0);
   }
+
+  // Which PR to point each broken dataset at. `--no-pr-lookup` keeps this
+  // function testable offline and without a token.
+  const pullRequests =
+    process.argv.includes("--no-pr-lookup") ? new Map() : await resolvePullRequests(brokenIds, byId);
 
   /**
    * How a dataset's failures read in one table cell.
@@ -394,7 +598,12 @@ if (mode === "report") {
 
     // Group by reason so "all 25 → HTTP 404" doesn't get reported as
     // "HTTP 404 (+24 more)" when the 24 are the same thing.
-    const reasonOf = (f) => (f.result?.error ? f.result.error : `HTTP ${f.result?.status}`);
+    // The attempt count matters to whoever reads this: "failed 3 times" is
+    // drift, one failure is a coin toss (see head()'s retry note).
+    const reasonOf = (f) => {
+      const base = f.result?.error ? f.result.error : `HTTP ${f.result?.status}`;
+      return f.result?.attempts > 1 ? `${base} (${f.result.attempts} attempts)` : base;
+    };
     const reasons = new Map();
     for (const f of failed) reasons.set(reasonOf(f), (reasons.get(reasonOf(f)) ?? 0) + 1);
     const topReason = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0][0];
@@ -438,14 +647,16 @@ if (mode === "report") {
     lines.push("");
     lines.push(`#### ${owner ? `@${owner}` : "No maintainer recorded"} — ${ids.length} unreachable`);
     lines.push("");
-    lines.push("| Dataset | Reachability | Manifest | Failing |");
-    lines.push("| --- | :---: | --- | --- |");
+    lines.push("| Dataset | Reachability | Manifest | Last PR | Failing |");
+    lines.push("| --- | :---: | --- | --- | --- |");
     for (const id of ids) {
       if (rowsEmitted >= MAX_ROWS) break;
       const meta = byId.get(id) ?? { id, file: "(unknown)", owner: null };
       const datasetLink = `[\`${id}\`](${SITE_BASE_URL}/datasets/${encodeURIComponent(id)}/)`;
       const manifestLink = `[\`${meta.file}\`](https://github.com/${REPO_SLUG}/blob/${REF_NAME}/${meta.file})`;
-      lines.push(`| ${datasetLink} | ❌ | ${manifestLink} | ${describeFailures(id, meta)} |`);
+      const pr = pullRequests.get(id);
+      const prCell = pr ? `[#${pr.number}](${pr.url})` : "—";
+      lines.push(`| ${datasetLink} | ❌ | ${manifestLink} | ${prCell} | ${describeFailures(id, meta)} |`);
       rowsEmitted += 1;
     }
   }
@@ -516,9 +727,116 @@ if (mode === "report") {
   );
   lines.push("- If it was a transient outage, re-run the sweep and this report will clear itself.");
 
+  // Machine-readable twin of the report above. `notify` consumes this rather
+  // than re-deriving anything (or, worse, parsing the Markdown), and it is
+  // also what the workflow renders into the job summary.
+  if (arg("json")) {
+    const rows = brokenIds.map((id) => {
+      const meta = byId.get(id) ?? { id, file: "(unknown)", owner: null };
+      const pr = pullRequests.get(id) ?? null;
+      return {
+        id,
+        owner: meta.owner ?? null,
+        manifest: meta.file,
+        datasetUrl: `${SITE_BASE_URL}/datasets/${encodeURIComponent(id)}/`,
+        manifestUrl: `https://github.com/${REPO_SLUG}/blob/${REF_NAME}/${meta.file}`,
+        pullRequest: pr,
+        failing: describeFailures(id, meta),
+        parseError: meta.parseError ?? null,
+      };
+    });
+    writeFileSync(
+      arg("json"),
+      JSON.stringify({ ok: false, stamp, checked, totalUrls, hosted, remote, rows }, null, 2) + "\n",
+    );
+  }
+
   process.stdout.write(lines.join("\n") + "\n");
   process.exit(1);
 }
 
-console.error(`usage: reachability.mjs plan --shards N | check --shard I --shards N [--out FILE] | report --results DIR`);
+// -------------------------------------------------------------- notify
+//
+// Posts one comment per broken dataset on the PR that last touched it,
+// tagging the manifest's github_owner. Separate from `report` so rendering is
+// testable without a token, and so a failure to comment can never turn a
+// successful sweep into a failed workflow.
+//
+// Idempotent: each comment carries an invisible marker keyed by dataset id, so
+// a weekly sweep edits last week's comment in place instead of stacking a new
+// one onto the same PR every Monday.
+if (mode === "notify") {
+  const planFile = arg("plan");
+  if (!planFile) {
+    console.error("notify: --plan <file> is required (produced by `report --json`)");
+    process.exit(2);
+  }
+  const plan = JSON.parse(readFileSync(planFile, "utf-8"));
+  const dryRun = process.argv.includes("--dry-run");
+
+  if (plan.ok) {
+    console.log("notify: sweep was clean, nothing to comment on");
+    process.exit(0);
+  }
+  if (!GH_TOKEN && !dryRun) {
+    console.error("notify: no GH_TOKEN in the environment -- skipping comments (the tracking issue still has it all)");
+    process.exit(0);
+  }
+
+  const withPr = plan.rows.filter((r) => r.pullRequest?.number);
+  const targets = withPr.slice(0, MAX_PR_COMMENTS);
+  console.log(
+    `notify: ${plan.rows.length} broken dataset(s); ${withPr.length} resolved to a PR; ` +
+      `commenting on ${targets.length}${withPr.length > targets.length ? ` (capped at ${MAX_PR_COMMENTS})` : ""}`,
+  );
+
+  let posted = 0;
+  let updated = 0;
+  for (const row of targets) {
+    const marker = `<!-- upstream-drift:${row.id} -->`;
+    const mention = row.owner ? `@${row.owner} ` : "";
+    const body = [
+      marker,
+      `⚠️ **\`${row.id}\` is unreachable upstream** — ${mention}this is the last pull request that touched it.`,
+      "",
+      `- **What failed:** ${row.failing}`,
+      `- **Manifest:** [\`${row.manifest}\`](${row.manifestUrl})`,
+      `- **Dataset page:** ${row.datasetUrl}`,
+      `- **Checked:** ${plan.stamp}`,
+      "",
+      "If the data moved, update the manifest's URL in a pull request — merging it re-ingests the dataset. " +
+        "If it is gone for good, delete the dataset directory. If this was a transient outage, the next weekly " +
+        "sweep clears the report by itself.",
+      "",
+      `_Posted by the upstream-drift sweep. The full report lives in the [\`upstream-drift\`](https://github.com/${REPO_SLUG}/issues?q=is%3Aissue+label%3Aupstream-drift) tracking issue._`,
+    ].join("\n");
+
+    if (dryRun) {
+      console.log(`--- would comment on #${row.pullRequest.number} (${row.pullRequest.source}) for ${row.id}`);
+      console.log(body);
+      continue;
+    }
+
+    const existing = await gh(`/repos/${REPO_SLUG}/issues/${row.pullRequest.number}/comments?per_page=100`);
+    const mine = (Array.isArray(existing) ? existing : []).find((c) => (c.body ?? "").includes(marker));
+    const result = mine
+      ? await gh(`/repos/${REPO_SLUG}/issues/comments/${mine.id}`, { method: "PATCH", body: { body } })
+      : await gh(`/repos/${REPO_SLUG}/issues/${row.pullRequest.number}/comments`, { method: "POST", body: { body } });
+    if (result) {
+      if (mine) updated += 1;
+      else posted += 1;
+      console.log(`notify: ${mine ? "updated" : "posted"} comment on #${row.pullRequest.number} for ${row.id}`);
+    }
+  }
+
+  console.log(`notify: ${posted} new comment(s), ${updated} updated`);
+  // Deliberately exit 0 even when some comments failed: the sweep's verdict is
+  // the tracking issue, not whether every courtesy ping landed.
+  process.exit(0);
+}
+
+console.error(
+  `usage: reachability.mjs plan --shards N | check --shard I --shards N [--out FILE] | ` +
+    `report --results DIR [--json FILE] [--no-pr-lookup] | notify --plan FILE [--dry-run]`,
+);
 process.exit(2);
