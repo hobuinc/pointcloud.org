@@ -59,3 +59,4 @@ ept_source:
   ept_catalog_id: ND_3DEPProcessing_6_D22
   pointcloud_org:
     copc_resolution: 1
+# reingest requested via #165 by @pointcloud-org on 2026-08-17T20:20:18Z
