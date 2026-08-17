@@ -38,7 +38,7 @@ links:
   - rel: about
     href: https://github.com/PDAL/data/tree/main/autzen/2023
   - rel: license
-    href: https://github.com/PDAL/data/blob/main/LICENSE
+    href: https://raw.githubusercontent.com/PDAL/data/main/LICENSE
 extent:
   temporal:
     interval:
