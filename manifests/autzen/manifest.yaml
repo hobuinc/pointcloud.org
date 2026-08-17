@@ -52,7 +52,7 @@ links:
   - rel: about
     href: https://github.com/PDAL/data/tree/main/autzen
   - rel: license
-    href: https://github.com/PDAL/data/blob/main/LICENSE
+    href: https://raw.githubusercontent.com/PDAL/data/main/LICENSE
 
 pointcloud_org:
   derivatives: true
