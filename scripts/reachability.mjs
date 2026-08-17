@@ -383,9 +383,12 @@ async function headOnce(href) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     let res = await fetch(href, { method: "HEAD", redirect: "follow", signal: controller.signal });
-    // Some hosts reject HEAD but serve GET fine, so a 403/405 on HEAD
-    // alone is not evidence the data is gone.
-    if (res.status === 403 || res.status === 405 || res.status === 501) {
+    // A failing HEAD is never the last word. Some hosts reject HEAD outright
+    // (403/405/501), and some answer 404 for a file that is plainly there:
+    // github.com served 404 to a bare HEAD for a 176 MB Git-LFS object that a
+    // ranged GET fetched perfectly, and the sweep condemned the dataset on it.
+    // A ranged GET is what an actual reader does, so it decides.
+    if (res.status === 403 || res.status === 404 || res.status === 405 || res.status === 410 || res.status === 501) {
       res = await fetch(href, {
         method: "GET",
         redirect: "follow",
