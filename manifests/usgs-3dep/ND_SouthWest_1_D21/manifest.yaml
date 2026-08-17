@@ -66,3 +66,4 @@ ept_source:
   ept_catalog_id: ND_SouthWest_1_D21
   pointcloud_org:
     copc_resolution: 1
+# reingest requested via #158 by @pointcloud-org on 2026-08-17T20:20:38Z
