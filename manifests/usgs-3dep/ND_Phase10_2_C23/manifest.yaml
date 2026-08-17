@@ -66,3 +66,4 @@ ept_source:
   ept_catalog_id: ND_Phase10_2_C23
   pointcloud_org:
     copc_resolution: 1
+# reingest requested via #157 by @pointcloud-org on 2026-08-17T20:20:32Z
