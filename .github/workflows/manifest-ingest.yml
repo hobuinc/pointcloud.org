@@ -343,6 +343,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          # github-script wires this into octokit's retry plugin. Added
+          # 2026-08-17 during a 51-PR batch, when GitHub answered "No server is
+          # currently available" to a dispatch and failed a check on a manifest
+          # that was perfectly fine -- the same 5xx hit 7 of 10 PR creations in
+          # the same minute. A dispatch that never happened is worse than a slow
+          # one: nothing downstream runs, and the only trace is a red check.
+          retries: 3
           script: |
             await github.rest.repos.createDispatchEvent({
               owner: "hobuinc",
@@ -381,6 +388,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          # github-script wires this into octokit's retry plugin. Added
+          # 2026-08-17 during a 51-PR batch, when GitHub answered "No server is
+          # currently available" to a dispatch and failed a check on a manifest
+          # that was perfectly fine -- the same 5xx hit 7 of 10 PR creations in
+          # the same minute. A dispatch that never happened is worse than a slow
+          # one: nothing downstream runs, and the only trace is a red check.
+          retries: 3
           script: |
             await github.rest.repos.createDispatchEvent({
               owner: "hobuinc",
@@ -488,6 +502,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          # github-script wires this into octokit's retry plugin. Added
+          # 2026-08-17 during a 51-PR batch, when GitHub answered "No server is
+          # currently available" to a dispatch and failed a check on a manifest
+          # that was perfectly fine -- the same 5xx hit 7 of 10 PR creations in
+          # the same minute. A dispatch that never happened is worse than a slow
+          # one: nothing downstream runs, and the only trace is a red check.
+          retries: 3
           script: |
             const removedIds = ${{ needs.changed.outputs.removed_dataset_ids }};
             // removedIds[0] is a manifest *directory path* relative to
