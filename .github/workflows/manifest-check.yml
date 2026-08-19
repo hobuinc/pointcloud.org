@@ -225,39 +225,14 @@ jobs:
       - name: Enforce the federation format allowlist
         run: node scripts/check-federate-extensions.mjs ${{ needs.changed.outputs.manifest_files }}
 
-  # Dry-run counterpart to manifest-publish.yml's ingest dispatch -- fires on
-  # every push to an open PR, so a contributor gets the credentialed feedback
-  # (does this file exist, do these tiles share a CRS, does this PDAL filter
-  # list parse) while they are still iterating, not only after merge. Gated on
-  # validate: no reason to spend a preflight run on a structurally broken
-  # manifest. See manifests/README.md's "How ingest actually happens".
-  dispatch-preflight:
-    needs: [changed, validate]
-    if: needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
-    runs-on: ubuntu-slim
-    timeout-minutes: 5
-    steps:
-      - name: Dispatch preflight to pointcloud.org-infrastructure
-        uses: actions/github-script@v8
-        with:
-          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
-          # github-script wires this into octokit's retry plugin. Added
-          # 2026-08-17 during a 51-PR batch, when GitHub answered "No server is
-          # currently available" to a dispatch and failed a check on a manifest
-          # that was perfectly fine -- the same 5xx hit 7 of 10 PR creations in
-          # the same minute. A dispatch that never happened is worse than a slow
-          # one: nothing downstream runs, and the only trace is a red check.
-          retries: 3
-          script: |
-            await github.rest.repos.createDispatchEvent({
-              owner: "hobuinc",
-              repo: "pointcloud.org-infrastructure",
-              event_type: "manifest-preflight",
-              client_payload: {
-                datasetIds: ${{ needs.changed.outputs.dataset_ids }},
-                prNumber: ${{ github.event.pull_request.number }},
-              },
-            });
+  # NOTE: the preflight dispatch that used to live here is gone (2026-08-19).
+  # Preflight now starts from the Worker's own POST /github-webhook, which
+  # receives the `pull_request` event directly and calls /preflight itself --
+  # see the infrastructure repo's stages/githubWebhook.ts and
+  # docs/ACTIONS-COST.md. The relay cost two billable minutes per dataset PR
+  # for eighteen seconds of work and, worse, put ingest behind a private repo's
+  # Actions quota; when that quota ran out on 2026-08-17 this dispatch step
+  # still reported success while nothing downstream ran.
 
   # A PR that removes an entire dataset directory gets a distinguishing label
   # and a sticky comment explaining what merging it will actually do -- see
