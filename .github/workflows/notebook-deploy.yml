@@ -19,10 +19,18 @@ on:
 
 jobs:
   dispatch:
-    runs-on: ubuntu-latest
+    # 1 vCPU / 5 GB, $0.002/min. Free on this public repo today, but every job
+    # is billed a full minute if this repo's visibility ever changes, and slim
+    # also starts faster. Container, not a VM, and capped at 15 minutes: do not
+    # move anything needing Docker or a long build here.
+    runs-on: ubuntu-slim
+    # Explicit cap: GitHub's default job timeout is 360 minutes, so any hang
+    # -- a wedged network call, a runner losing its connection -- bills six
+    # hours before it is reaped. Nothing here legitimately takes this long.
+    timeout-minutes: 5
     steps:
       - name: Dispatch a JupyterLite rebuild to pointcloud.org-infrastructure
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
           script: |

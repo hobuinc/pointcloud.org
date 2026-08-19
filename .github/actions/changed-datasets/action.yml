@@ -1,0 +1,131 @@
+# Which dataset directories under manifests/ a pull request touches.
+#
+# Lives in a composite action rather than inline in a workflow because BOTH
+# halves of the ingest flow need the same answer, and they are deliberately
+# separate workflows now (manifest-check.yml on an open/updated PR,
+# manifest-publish.yml on a merge -- see either file's header for why). This
+# used to be one inline script in one workflow that muxed both phases through
+# `if:` conditions; splitting the workflows without extracting this first would
+# have meant two copies of the logic below, drifting apart at the first fix.
+#
+# Needs the calling job to have checked the repo out (it is a local action).
+name: Changed datasets
+description: Resolve which manifests/ dataset directories a PR adds, edits, or removes.
+
+outputs:
+  dataset_ids:
+    description: JSON array of dataset directories this PR adds or edits.
+    value: ${{ steps.changed.outputs.dataset_ids }}
+  manifest_files:
+    description: Space-separated manifest.yaml paths for dataset_ids, for the check scripts.
+    value: ${{ steps.changed.outputs.manifest_files }}
+  removed_dataset_ids:
+    description: JSON array of dataset directories this PR removes entirely.
+    value: ${{ steps.changed.outputs.removed_dataset_ids }}
+  too_many_datasets:
+    description: '"true" when the PR touches more than one dataset directory.'
+    value: ${{ steps.changed.outputs.too_many_datasets }}
+  migration:
+    description: '"true" when the PR title carries a [migration] marker.'
+    value: ${{ steps.changed.outputs.migration }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine which dataset directories this PR changed
+      id: changed
+      uses: actions/github-script@v8
+      with:
+        script: |
+          const { data: files } = await github.rest.pulls.listFiles({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.payload.pull_request.number,
+            per_page: 100,
+          });
+          // Require at least 3 path segments (manifests/<dir>/<file>)
+          // before treating "everything between manifests/ and the
+          // filename" as a dataset directory -- otherwise a top-level
+          // file directly under manifests/ (e.g. manifests/schema.json,
+          // which has only 2 segments) gets mistaken for a directory.
+          // Learned from a real failure: PR #5 touched schema.json
+          // alongside dataset directories and broke exactly this way.
+          //
+          // "Dataset directory" here is deliberately just "the
+          // filename's own dirname" at ANY depth (2026-08, schema_version
+          // 2's grouping-directory support -- e.g.
+          // "manifests/usgs-3dep/boston-lot/manifest.yaml" resolves to
+          // "usgs-3dep/boston-lot"), not a hardcoded single segment.
+          // This assumes contributors only ever put files inside a real
+          // LEAF dataset directory, never directly inside a bare
+          // grouping directory (manifests/usgs-3dep/ itself never holds
+          // its own manifest.yaml or companion files) -- documented in
+          // README.md's "Grouping datasets into directories".
+          const datasetDirOf = (filename) => filename.split("/").slice(1, -1).join("/");
+          const datasetDirFiles = files.filter(
+            (f) => f.filename.startsWith("manifests/") && f.filename.split("/").length > 2,
+          );
+          // A dataset directory counts as "changed" (added/edited) if
+          // ANY file under it is still present after this PR -- not
+          // just manifest.yaml itself -- since editing a referenced
+          // companion file (e.g. a pdal_filters_file JSON) should
+          // re-check/re-trigger for that dataset too.
+          const datasetIds = [
+            ...new Set(
+              datasetDirFiles.filter((f) => f.status !== "removed").map((f) => datasetDirOf(f.filename)),
+            ),
+          ];
+          // A dataset directory counts as "removed" only if EVERY file
+          // this PR touched under it has status "removed" -- i.e. it's
+          // not also in datasetIds above. A PR that deletes one
+          // companion file but leaves manifest.yaml (or adds/edits
+          // another file) in the same directory is an edit, not a
+          // removal, and datasetIds already covers that case.
+          const removedDatasetIds = [
+            ...new Set(
+              datasetDirFiles.filter((f) => f.status === "removed").map((f) => datasetDirOf(f.filename)),
+            ),
+          ].filter((id) => !datasetIds.includes(id));
+
+          core.setOutput("dataset_ids", JSON.stringify(datasetIds));
+          core.setOutput("manifest_files", datasetIds.map((id) => `manifests/${id}/manifest.yaml`).join(" "));
+          core.setOutput("removed_dataset_ids", JSON.stringify(removedDatasetIds));
+          // One PR may only add, edit, OR remove ONE dataset directory
+          // -- see manifest-check.yml's `reject-multi-dataset-pr` job,
+          // which is the thing that actually acts on this output (posts a
+          // comment + fails the check). Computed here, once, rather than
+          // repeated as an inline expression on every job that needs to
+          // also refuse to run for a too-many-datasets PR. Counts distinct
+          // directories touched at all (added, edited, or removed), not
+          // just datasetIds -- a PR that removes one dataset while editing
+          // an unrelated one is still two datasets in one PR.
+          const totalTouched = new Set([...datasetIds, ...removedDatasetIds]).size;
+          core.setOutput("too_many_datasets", totalTouched > 1 ? "true" : "false");
+
+          // A MIGRATION is a deliberate fleet-wide change -- a schema
+          // field becoming required, a link structure changing, a
+          // convention being applied across the archive. It inherently
+          // touches every dataset at once, which is exactly what
+          // one-dataset-per-PR exists to prevent for *contributions*.
+          //
+          // conda-forge treats migrations as their own class of change
+          // for this reason. Signalled by a `[migration]` marker in the
+          // PR title rather than a label, because a title is evaluated
+          // on the ordinary opened/synchronize events -- a label would
+          // need `labeled` in the calling workflow's `types:`, which is
+          // the thing that caused the stale-workflow-file mess (see
+          // reingest.yml's header).
+          //
+          // Titles are only settable by someone who can open or edit
+          // the PR, so this is not an authorization boundary: it makes
+          // multi-dataset PRs *possible*, and the reviewer merging it
+          // is the actual gate. Every other check still runs.
+          const title = context.payload.pull_request.title || "";
+          const isMigration = /\[migration\]/i.test(title);
+          core.setOutput("migration", isMigration ? "true" : "false");
+          if (isMigration) {
+            core.notice(
+              `PR title contains [migration] -- the one-dataset-per-PR rule is relaxed and ` +
+                `validation runs against every manifest in the repo instead of just the changed one.`,
+            );
+          }

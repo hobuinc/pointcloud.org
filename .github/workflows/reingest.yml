@@ -36,7 +36,7 @@
 # this job never checks out or executes anything from the labeled PR's
 # head ref. It only reads *which file* that PR touched via the read-only
 # Pulls Files API (metadata, not code), then checks out `main` itself
-# (actions/checkout@v4's default ref for pull_request_target is already
+# (actions/checkout's default ref for pull_request_target is already
 # the base ref) and re-touches a manifest.yaml line there. There is no
 # path from an attacker-controlled PR body/diff into anything executed
 # here. Labeling itself also requires triage/write access on this repo
@@ -57,7 +57,15 @@ on:
 jobs:
   reingest:
     if: github.event.action == 'labeled' && github.event.label.name == 'reingest' && github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    # 1 vCPU / 5 GB, $0.002/min. Free on this public repo today, but every job
+    # is billed a full minute if this repo's visibility ever changes, and slim
+    # also starts faster. Container, not a VM, and capped at 15 minutes: do not
+    # move anything needing Docker or a long build here.
+    runs-on: ubuntu-slim
+    # Explicit cap: GitHub's default job timeout is 360 minutes, so any hang
+    # -- a wedged network call, a runner losing its connection -- bills six
+    # hours before it is reaped. Nothing here legitimately takes this long.
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
@@ -83,7 +91,7 @@ jobs:
       # account itself.
       GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false

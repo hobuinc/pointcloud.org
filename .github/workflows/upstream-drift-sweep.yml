@@ -61,14 +61,23 @@ permissions:
 
 jobs:
   plan:
+    # ubuntu-latest, not ubuntu-slim: a `check` shard walks every URL in its
+    # slice with retries, and a slow upstream can push one past ubuntu-slim's
+    # hard 15-minute cap -- which would read as a broken dataset rather than a
+    # slow host. Weekly and free on this public repo, so there is nothing to
+    # save by risking that.
     runs-on: ubuntu-latest
+    # Explicit cap: GitHub's default job timeout is 360 minutes, so any hang
+    # -- a wedged network call, a runner losing its connection -- bills six
+    # hours before it is reaped. Nothing here legitimately takes this long.
+    timeout-minutes: 10
     outputs:
       shard_ids: ${{ steps.plan.outputs.shard_ids }}
       shards: ${{ steps.plan.outputs.shards }}
       summary: ${{ steps.plan.outputs.summary }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm install --no-audit --no-fund
@@ -83,7 +92,16 @@ jobs:
 
   check:
     needs: plan
+    # ubuntu-latest, not ubuntu-slim: a `check` shard walks every URL in its
+    # slice with retries, and a slow upstream can push one past ubuntu-slim's
+    # hard 15-minute cap -- which would read as a broken dataset rather than a
+    # slow host. Weekly and free on this public repo, so there is nothing to
+    # save by risking that.
     runs-on: ubuntu-latest
+    # Explicit cap: GitHub's default job timeout is 360 minutes, so any hang
+    # -- a wedged network call, a runner losing its connection -- bills six
+    # hours before it is reaped. Nothing here legitimately takes this long.
+    timeout-minutes: 20
     strategy:
       # One runner per shard. `fail-fast: false` is essential: a shard
       # whose slice happens to contain a broken URL must not cancel the
@@ -93,8 +111,8 @@ jobs:
       matrix:
         shard: ${{ fromJson(needs.plan.outputs.shard_ids) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm install --no-audit --no-fund
@@ -104,7 +122,7 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
             --out "reachability-shard-${{ matrix.shard }}.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: reachability-shard-${{ matrix.shard }}
           path: reachability-shard-${{ matrix.shard }}.json
@@ -116,16 +134,25 @@ jobs:
     # finding a failure) still produces a report from whatever did
     # complete, instead of silently skipping the whole sweep.
     if: always()
+    # ubuntu-latest, not ubuntu-slim: a `check` shard walks every URL in its
+    # slice with retries, and a slow upstream can push one past ubuntu-slim's
+    # hard 15-minute cap -- which would read as a broken dataset rather than a
+    # slow host. Weekly and free on this public repo, so there is nothing to
+    # save by risking that.
     runs-on: ubuntu-latest
+    # Explicit cap: GitHub's default job timeout is 360 minutes, so any hang
+    # -- a wedged network call, a runner losing its connection -- bills six
+    # hours before it is reaped. Nothing here legitimately takes this long.
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm install --no-audit --no-fund
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: reachability-shard-*
           path: shards
@@ -171,7 +198,7 @@ jobs:
 
       # Uploaded as well as summarised: the summary is for reading, this is for
       # anything that wants to diff one week's drift against the next.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: drift-report

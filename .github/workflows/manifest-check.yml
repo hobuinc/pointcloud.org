@@ -1,0 +1,438 @@
+# Everything that happens to a dataset PR while it is still OPEN.
+#
+# The merge half lives in manifest-publish.yml. They used to be one workflow
+# ("Manifest ingest") reacting to `opened, synchronize, reopened, closed` and
+# sorting out which phase it was in via `if:` on every job. That worked, but it
+# meant a single run showed ten jobs of which seven or eight were skipped, and
+# which seven depended on the event -- so reading a run told you very little
+# about what the pipeline actually does. Two workflows, one event class each,
+# means one legible pathway per run:
+#
+#   manifest-check.yml   (this file)   PR opened / updated  -> checks + preflight
+#   manifest-publish.yml               PR merged            -> ingest / removal
+#
+# Nothing here needs infrastructure credentials. This repo is the public,
+# community-facing half of pointcloud.org: anyone can open a PR adding a dataset
+# under manifests/<id>/, and this repo holds no infrastructure secrets beyond
+# INFRA_DISPATCH_TOKEN, a fine-grained PAT scoped ONLY to the private
+# infrastructure repo's dispatches endpoint. Any check needing real credentials
+# (does this file exist, do these tiles share a CRS, does this PDAL filter list
+# parse) happens on the infrastructure side of a dispatch -- see
+# manifests/README.md's "How ingest actually happens". Only credential-free
+# checks (schema shape, do relative-path references resolve locally, is a
+# foreign URL reachable) run here, so they are safe for a fork's PR too.
+#
+# Runner note: every job here is seconds of API calls and small Node scripts, so
+# they run on `ubuntu-slim` (1 vCPU, $0.002/min -- a third of ubuntu-latest, and
+# GitHub bills every job a full minute no matter how short it is). Anything that
+# needs a real VM, more cores, or over 15 minutes must not use slim.
+name: Manifest check
+
+on:
+  pull_request:
+    # No `paths:` filter (2026-08-10, removed) -- `changed` below re-derives
+    # "does this PR even touch manifests/?" from the PR-files API rather than
+    # GitHub's push-diff paths engine, so a filter here would only save a few
+    # cheap runs while silently breaking any `labeled`-type event (see
+    # reingest.yml's header for the incident that taught us that).
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# One in-flight check run per PR. A contributor pushing three commits in a
+# minute previously got three full sets of checks racing each other, all but the
+# last of them already irrelevant -- and on a fleet-wide migration PR that is
+# three whole-archive validations.
+concurrency:
+  group: manifest-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Which dataset directories this PR touches. Shared by everything below, and
+  # with manifest-publish.yml, via the composite action -- see
+  # .github/actions/changed-datasets/action.yml.
+  changed:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    outputs:
+      dataset_ids: ${{ steps.changed.outputs.dataset_ids }}
+      manifest_files: ${{ steps.changed.outputs.manifest_files }}
+      removed_dataset_ids: ${{ steps.changed.outputs.removed_dataset_ids }}
+      too_many_datasets: ${{ steps.changed.outputs.too_many_datasets }}
+      migration: ${{ steps.changed.outputs.migration }}
+    steps:
+      # Needed only so the local composite action below exists on disk.
+      - uses: actions/checkout@v5
+      - id: changed
+        uses: ./.github/actions/changed-datasets
+
+  # A PR that touches more than one dataset directory gets rejected outright --
+  # one PR, one dataset, so review/preflight/ingest stay scoped to a single
+  # change a maintainer can reason about (and so a broken dataset never blocks
+  # an unrelated one sharing the same PR). Posts a sticky comment and fails the
+  # check, in addition to scripts/validate-manifests.mjs's own refusal.
+  reject-multi-dataset-pr:
+    needs: changed
+    if: needs.changed.outputs.too_many_datasets == 'true' && needs.changed.outputs.migration != 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    # Explicit, in addition to (not instead of) `validate`'s own refusal to run
+    # against multiple manifest paths: a PR from a fork gets a read-only
+    # GITHUB_TOKEN by GitHub platform policy no matter what is declared here, so
+    # the comment step below can silently fail to post for a fork contributor.
+    # This covers the common case (a same-repo PR); `validate` failing is the
+    # fallback signal that still works when the comment cannot post.
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment and fail
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const datasetIds = [
+              ...new Set([...${{ needs.changed.outputs.dataset_ids }}, ...${{ needs.changed.outputs.removed_dataset_ids }}]),
+            ];
+            const marker = "<!-- pointcloud:too-many-datasets -->";
+            const body = [
+              marker,
+              `This PR touches **${datasetIds.length} dataset directories** (${datasetIds.map((id) => `\`${id}\``).join(", ")}).`,
+              "",
+              "Each pull request may only add, edit, or remove **one** dataset directory under `manifests/`. Please close this PR and resubmit as separate pull requests, one per dataset.",
+            ].join("\n");
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (err) {
+              // Most likely a fork PR's read-only token -- see this job's
+              // permissions comment above. Don't let a failed comment post
+              // mask the real signal below.
+              core.warning(`could not post the too-many-datasets comment: ${err.message}`);
+            }
+
+            core.setFailed(`This PR touches ${datasetIds.length} dataset directories -- split it into separate PRs.`);
+
+  # Schema/local-file validation, and the gate everything expensive waits on.
+  # Scoped to the dataset(s) this PR changed; when manifest_files is empty (e.g.
+  # a PR touching only manifests/schema.json) validate-manifests.mjs falls back
+  # to every manifest in the repo, since a schema change can break a dataset it
+  # did not directly touch. When manifest_files names more than one dataset the
+  # script refuses outright -- that PR needs reject-multi-dataset-pr, not a real
+  # validation run.
+  validate:
+    needs: changed
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          # Restores ~/.npm from a key derived from package-lock.json, so a
+          # fresh runner does not re-download the same dependency tree on every
+          # job of every PR.
+          cache: npm
+      - name: Install dependencies (js-yaml, ajv, for the validator)
+        run: npm ci
+      # For a migration, pass no file list at all: validate-manifests.mjs falls
+      # back to validating EVERY manifest in the repo, which is precisely what a
+      # fleet-wide change needs -- and it refuses an explicit multi-dataset
+      # list, so passing the changed files would just fail.
+      - name: Validate manifest(s)
+        run: |
+          if [ "${{ needs.changed.outputs.migration }}" = "true" ]; then
+            echo "[migration] validating every manifest in the repo"
+            node scripts/validate-manifests.mjs
+          else
+            node scripts/validate-manifests.mjs ${{ needs.changed.outputs.manifest_files }}
+          fi
+
+  # Foreign/https URL reachability + a resolved-payload-size estimate. Both need
+  # zero infrastructure credentials (a plain HEAD request, a local
+  # JSON.stringify), so they run here rather than in the credentialed
+  # infrastructure-side preflight. Only the datasets this PR changed, not the
+  # whole repo -- no reason to re-check a URL nothing in this PR touched.
+  #
+  # `needs: validate` is deliberate (added 2026-08-19): this is the most
+  # expensive job here -- one HEAD per asset URL, and a single dataset can list
+  # tens of thousands of tiles -- and there is no point spending it on a
+  # manifest that is already structurally broken. A schema error now shows up
+  # alone rather than alongside a wall of network output.
+  check-reachability:
+    needs: [changed, validate]
+    if: needs.changed.outputs.manifest_files != ''
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies (js-yaml)
+        run: npm ci
+      - name: Check foreign/https URL reachability + payload size
+        run: node scripts/check-reachability.mjs ${{ needs.changed.outputs.manifest_files }}
+
+  # Does this PR's manifest request `dataset.federate: true`? Credential-free
+  # (just reading YAML this PR already touched). Feeds label-and-comment-federate
+  # below, which is the thing that actually posts something about it. Kept as its
+  # own job so that boolean output is easy to depend on.
+  check-federate:
+    needs: [changed, validate]
+    if: needs.changed.outputs.manifest_files != ''
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    outputs:
+      federate: ${{ steps.check.outputs.federate }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies (js-yaml)
+        run: npm ci
+      - name: Check dataset.federate
+        id: check
+        run: echo "federate=$(node scripts/check-federate.mjs ${{ needs.changed.outputs.manifest_files }})" >> "$GITHUB_OUTPUT"
+      # Hard gate, not advisory: `federate: true` is the one field that makes
+      # this project copy submitter-specified URLs into its own bucket and
+      # republish them under its own domain, so the files being copied have to
+      # be recognized point-cloud/raster formats. Fails the check (rather than
+      # warning) precisely because a PR that gets this wrong must not be
+      # mergeable. See the script's doc comment for why this is extension-based
+      # and why ept_source is excluded.
+      - name: Enforce the federation format allowlist
+        run: node scripts/check-federate-extensions.mjs ${{ needs.changed.outputs.manifest_files }}
+
+  # Dry-run counterpart to manifest-publish.yml's ingest dispatch -- fires on
+  # every push to an open PR, so a contributor gets the credentialed feedback
+  # (does this file exist, do these tiles share a CRS, does this PDAL filter
+  # list parse) while they are still iterating, not only after merge. Gated on
+  # validate: no reason to spend a preflight run on a structurally broken
+  # manifest. See manifests/README.md's "How ingest actually happens".
+  dispatch-preflight:
+    needs: [changed, validate]
+    if: needs.changed.outputs.dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch preflight to pointcloud.org-infrastructure
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          # github-script wires this into octokit's retry plugin. Added
+          # 2026-08-17 during a 51-PR batch, when GitHub answered "No server is
+          # currently available" to a dispatch and failed a check on a manifest
+          # that was perfectly fine -- the same 5xx hit 7 of 10 PR creations in
+          # the same minute. A dispatch that never happened is worse than a slow
+          # one: nothing downstream runs, and the only trace is a red check.
+          retries: 3
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "manifest-preflight",
+              client_payload: {
+                datasetIds: ${{ needs.changed.outputs.dataset_ids }},
+                prNumber: ${{ github.event.pull_request.number }},
+              },
+            });
+
+  # A PR that removes an entire dataset directory gets a distinguishing label
+  # and a sticky comment explaining what merging it will actually do -- see
+  # manifests/README.md's "Removing a dataset". Purely informational; the real
+  # removal happens post-merge, in manifest-publish.yml.
+  label-and-comment-removal:
+    needs: changed
+    if: needs.changed.outputs.removed_dataset_ids != '[]' && needs.changed.outputs.too_many_datasets != 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    # Same fork-PR caveat as reject-multi-dataset-pr above: a fork's default
+    # GITHUB_TOKEN is read-only by GitHub platform policy no matter what is
+    # declared here, so labeling/commenting can silently fail to post for a fork
+    # contributor. Nothing depends on it succeeding -- the removal dispatch in
+    # manifest-publish.yml still fires on merge either way.
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Label PR and post removal notice
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const removedIds = ${{ needs.changed.outputs.removed_dataset_ids }};
+            const datasetId = removedIds[0];
+
+            try {
+              // Adding a label name that doesn't exist yet on this repo
+              // auto-creates it (with a default color) -- no separate
+              // "ensure label exists" step needed.
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ["removal"],
+              });
+            } catch (err) {
+              core.warning(`could not add the "removal" label: ${err.message}`);
+            }
+
+            const marker = "<!-- pointcloud:removal-notice -->";
+            const body = [
+              marker,
+              `### This PR removes \`${datasetId}\` from the archive index`,
+              "",
+              `Merging this PR deletes \`manifests/${datasetId}/\`, which will:`,
+              "",
+              `- Drop **${datasetId}** from pointcloud.org's site listing (the site is built directly from this directory, so once it's gone here, it's gone there too).`,
+              `- Remove **${datasetId}**'s STAC Collection/Items/GeoParquet from pointcloud.org's infrastructure, and drop it from the root STAC Catalog.`,
+              `- Leave **${datasetId}**'s underlying point-cloud data in storage, untouched -- this only removes it from the *index*, it does not delete archived data.`,
+            ].join("\n");
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (err) {
+              core.warning(`could not post the removal notice comment: ${err.message}`);
+            }
+
+  # A PR whose manifest sets `dataset.federate: true` gets a distinguishing
+  # label and a sticky comment explaining that merging it will copy the
+  # dataset's source data into pointcloud.org's own storage, not just reference
+  # it -- see schema.json's `federate` description and
+  # worker/src/stages/federation.ts's doc comment for what that actually does.
+  # Purely informational; the real copy happens post-merge, as part of ingest.
+  label-and-comment-federate:
+    needs: [changed, check-federate]
+    if: needs.check-federate.outputs.federate == 'true' && needs.changed.outputs.too_many_datasets != 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies (js-yaml)
+        run: npm ci
+      # Best-effort HEAD-request size estimate of what federation.ts will
+      # actually copy -- see federate-size.mjs's doc comment for exactly what it
+      # measures and why (items[]'s foreign asset hrefs only; ept_source is
+      # never federated, and a stac_item reference's real asset hrefs aren't
+      # known without fetching that foreign document too). "unknown" (not a
+      # number) if every URL's HEAD failed to report a Content-Length --
+      # surfaced as such in the comment below rather than silently showing 0 GB.
+      - name: Estimate federated dataset size
+        id: size
+        run: echo "bytes=$(node scripts/federate-size.mjs ${{ needs.changed.outputs.manifest_files }})" >> "$GITHUB_OUTPUT"
+      - name: Label PR and post federate notice
+        uses: actions/github-script@v8
+        env:
+          FEDERATE_SIZE_BYTES: ${{ steps.size.outputs.bytes }}
+        with:
+          script: |
+            const datasetIds = ${{ needs.changed.outputs.dataset_ids }};
+            const datasetId = datasetIds[0];
+
+            const rawBytes = process.env.FEDERATE_SIZE_BYTES;
+            const sizeLine =
+              rawBytes === "unknown" || !rawBytes
+                ? "unknown (one or more source URLs didn't report a size)"
+                : `~${(Number(rawBytes) / 1024 ** 3).toFixed(2)} GB`;
+
+            try {
+              // Adding a label name that doesn't exist yet on this repo
+              // auto-creates it (default color) -- same as the "removal"
+              // label above.
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ["federated"],
+              });
+            } catch (err) {
+              core.warning(`could not add the "federated" label: ${err.message}`);
+            }
+
+            const marker = "<!-- pointcloud:federate-notice -->";
+            const body = [
+              marker,
+              `### This PR requests \`federate: true\` for \`${datasetId}\``,
+              "",
+              `**This dataset's data will be copied into pointcloud.org's own storage, not just referenced.** Merging this PR copies **${datasetId}**'s asset data from wherever this manifest currently points into pointcloud.org's own bucket, at ingest time. Every later stage (metadata extraction, derivatives, the hero image) will then use that copy, and pointcloud.org's own record of this dataset's manifest will be rewritten to point at it.`,
+              "",
+              `**Estimated size to copy:** ${sizeLine}`,
+              "",
+              "This does not change the manifest committed in this repo -- only pointcloud.org's own internal record of where the data actually lives.",
+            ].join("\n");
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (err) {
+              core.warning(`could not post the federate notice comment: ${err.message}`);
+            }

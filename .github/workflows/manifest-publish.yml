@@ -1,0 +1,145 @@
+# What happens to a dataset PR when it is MERGED: hand the change to
+# pointcloud.org's private infrastructure, which does the real work.
+#
+# The open-PR half lives in manifest-check.yml -- read its header for why these
+# are two workflows instead of one. The short version: one workflow reacting to
+# both `synchronize` and `closed` meant every run displayed ten jobs with seven
+# or eight skipped, and which ones were skipped depended on the event.
+#
+# This half is deliberately ONE job with sequential steps rather than three
+# conditional jobs. A merge does at most two things -- dispatch an ingest, or
+# dispatch a removal -- and expressing that as three jobs meant a PR closed
+# WITHOUT merging produced a run of three skipped jobs, and a merged PR produced
+# a run where two of three jobs skipped. As steps inside one job, the same logic
+# reads top to bottom, the run graph is a single node, and the job summary at the
+# end states which path it took.
+#
+# Note the `if:` is on the job, not the steps: a PR closed without merging
+# (abandoned) must never ingest or remove anything, and that one condition
+# guards everything. Such a close produces exactly one skipped job.
+name: Manifest publish
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+# Serialize per PR. Merges are one-shot events so collisions are unlikely, but a
+# re-run must never race the original.
+concurrency:
+  group: manifest-publish-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # The whole workflow's reason for existing. Everything below assumes a real
+    # merge; nothing here is safe to run for an abandoned PR.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      # Needed only so the local composite action below exists on disk.
+      - uses: actions/checkout@v5
+
+      # Same resolution the check half uses, from the same composite action --
+      # see .github/actions/changed-datasets/action.yml.
+      - id: changed
+        uses: ./.github/actions/changed-datasets
+
+      # No payload building here. This step used to resolve the full dataset
+      # payload (every asset entry) and hand it to the infra repo as
+      # `client_payload`, but GitHub rejects a repository_dispatch whose
+      # client_payload is too large (a 422) well under the size of a single real
+      # dataset -- wi-adams-2019's ~1,026 hand-authored assets alone serialize to
+      # ~150KB. client_payload now carries only which dataset IDs changed and the
+      # merge commit they changed at, which is tiny regardless of dataset size or
+      # count. The infra repo's receive-manifest-dispatch.yml checks out this
+      # repo at that commit and resolves the real payload there, then POSTs it
+      # to the ingest backend directly (no GitHub API size limit on an ordinary
+      # HTTPS POST body).
+      - name: Dispatch ingest to pointcloud.org-infrastructure
+        id: ingest
+        if: steps.changed.outputs.dataset_ids != '[]' && steps.changed.outputs.too_many_datasets != 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          # github-script wires this into octokit's retry plugin. Added
+          # 2026-08-17 during a 51-PR batch, when GitHub answered "No server is
+          # currently available" to a dispatch and failed a check on a manifest
+          # that was perfectly fine -- the same 5xx hit 7 of 10 PR creations in
+          # the same minute. A dispatch that never happened is worse than a slow
+          # one: nothing downstream runs, and the only trace is a red check.
+          retries: 3
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "manifest-ingest",
+              client_payload: {
+                datasetIds: ${{ steps.changed.outputs.dataset_ids }},
+                sha: "${{ github.event.pull_request.merge_commit_sha }}",
+                prNumber: ${{ github.event.pull_request.number }},
+              },
+            });
+
+      # Dispatches straight to the Worker's /remove endpoint via
+      # receive-manifest-removal.yml. Unlike ingest there is no payload to
+      # resolve -- nothing is left to read once the directory is deleted -- so
+      # this needs no build-datasets-payload.mjs step, just which id to remove.
+      - name: Dispatch removal to pointcloud.org-infrastructure
+        id: removal
+        if: steps.changed.outputs.removed_dataset_ids != '[]' && steps.changed.outputs.too_many_datasets != 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          retries: 3
+          script: |
+            const removedIds = ${{ steps.changed.outputs.removed_dataset_ids }};
+            // removedIds[0] is a manifest *directory path* relative to
+            // manifests/ (e.g. "usgs-3dep/boston-lot" for a grouped dataset) --
+            // but unlike the ingest dispatch above there is no manifest.yaml
+            // left to read at this point (the PR deleted it), so the infra side
+            // has nothing to derive a real dataset id from the way
+            // build-datasets-payload.mjs normally would. Take just the leaf
+            // segment here instead -- the flat, globally-unique id every R2
+            // key/site route/STAC entry is actually keyed by.
+            const datasetId = removedIds[0].split("/").pop();
+            await github.rest.repos.createDispatchEvent({
+              owner: "hobuinc",
+              repo: "pointcloud.org-infrastructure",
+              event_type: "manifest-removal",
+              client_payload: {
+                datasetId,
+                sha: "${{ github.event.pull_request.merge_commit_sha }}",
+                prNumber: ${{ github.event.pull_request.number }},
+              },
+            });
+
+      # Replaces the visibility that separate per-path jobs used to give: with
+      # one job, the run graph no longer shows which path was taken, so say it
+      # here. `always()` so a failed dispatch still reports what it was trying
+      # to do.
+      - name: Summarize what this merge dispatched
+        if: always()
+        run: |
+          {
+            echo "## Manifest publish"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Merged PR | #${{ github.event.pull_request.number }} |"
+            echo "| Merge commit | \`${{ github.event.pull_request.merge_commit_sha }}\` |"
+            echo "| Datasets added/edited | \`${{ steps.changed.outputs.dataset_ids }}\` |"
+            echo "| Datasets removed | \`${{ steps.changed.outputs.removed_dataset_ids }}\` |"
+            echo "| Ingest dispatch | ${{ steps.ingest.outcome || 'not attempted' }} |"
+            echo "| Removal dispatch | ${{ steps.removal.outcome || 'not attempted' }} |"
+            echo
+            if [ "${{ steps.changed.outputs.too_many_datasets }}" = "true" ]; then
+              echo "⚠️ This PR touched more than one dataset directory, so nothing was dispatched."
+              echo "One PR, one dataset -- see manifests/README.md."
+            elif [ "${{ steps.ingest.outcome }}" = "skipped" ] && [ "${{ steps.removal.outcome }}" = "skipped" ]; then
+              echo "This merge touched no dataset directory under \`manifests/\`, so there was nothing to dispatch."
+            else
+              echo "Follow the dispatched work in [pointcloud.org-infrastructure's Actions](https://github.com/hobuinc/pointcloud.org-infrastructure/actions)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
