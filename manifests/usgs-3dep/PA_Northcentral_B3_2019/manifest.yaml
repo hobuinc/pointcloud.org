@@ -1,0 +1,69 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, part of a five-state EPT batch ingest (ND, PA, NY,
+# ME, MS). Selected because this workunit has both USGS EPT hosting and a
+# WESM.csv row -- the dates, quality level, spec and CRS below all come from
+# WESM, the point count from the workunit's own ept.json, and the producer
+# from the vendor FGDC metadata. Workunits with EPT but no WESM row were
+# deferred rather than published without acquisition dates.
+type: Collection
+stac_version: "1.0.0"
+id: PA_Northcentral_B3_2019
+title: Pennsylvania 3DEP Lidar — Northcentral B3 2019
+description: >
+  Classified airborne lidar point cloud collected 2019-03-26 through
+  2019-05-08 by Quantum Spatial, Inc. for the USGS 3D Elevation Program
+  (3DEP) as part of the "PA_Northcentral_2019_B19" project (project ID
+  176725), acquired to QL 2 meeting the USGS Lidar Base Specification 1.3.
+  Approximately 138,364,149,002 points. Served here directly from USGS's
+  public Entwine Point Tile (EPT) bucket via `ept_source` -- not copied into
+  pointcloud.org's own storage, so this Collection's single item streams
+  live from USGS's own infrastructure.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [pennsylvania, usgs, 3dep, lidar, entwine, ept, quantum-spatial-inc]
+providers:
+  - name: Quantum Spatial, Inc.
+    roles: [producer]
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+        github_owner: hobu
+extent:
+  temporal:
+    interval:
+      - ["2019-03-26", "2019-05-08"]
+
+"sci:citation": >
+  Quantum Spatial, Inc. (2019). PA_Northcentral_2019_B19; Project ID:
+  176725; Classified Point Cloud. U.S. Geological Survey 3D Elevation
+  Program.
+
+links:
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/PA_Northcentral_2019_B19/PA_Northcentral_B3_2019/reports/vendor_provided_xml/Pennsylvania_NC_32498_Albers_QL2_DEM.xml
+    title: "Vendor FGDC metadata for PA_Northcentral_B3_2019"
+
+pointcloud_org:
+  derivatives: false
+  spatial_reference:
+    id: "EPSG:6350"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6350
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  viewer:
+    enabled: true
+    default_asset_id: PA_Northcentral_B3_2019
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/PA_Northcentral_B3_2019/ept.json
+  ept_catalog_id: PA_Northcentral_B3_2019
+  pointcloud_org:
+    copc_resolution: 1
