@@ -1,0 +1,68 @@
+schema_version: 2
+
+# USGS 3DEP acquisition, part of a five-state EPT batch ingest (ND, PA, NY,
+# ME, MS). Selected because this workunit has both USGS EPT hosting and a
+# WESM.csv row -- the dates, quality level, spec and CRS below all come from
+# WESM, the point count from the workunit's own ept.json, and the producer
+# from the vendor FGDC metadata. Workunits with EPT but no WESM row were
+# deferred rather than published without acquisition dates.
+type: Collection
+stac_version: "1.0.0"
+id: ME_Eastern_TL_2017
+title: Maine 3DEP Lidar — Eastern TL 2017
+description: >
+  Classified airborne lidar point cloud collected 2017-04-30 through
+  2017-11-21 by Quantum Spatial, Inc. for the USGS 3D Elevation Program
+  (3DEP) as part of the "ME_EasternME_2017_A17" project (project ID 66488),
+  acquired to QL 2 meeting the USGS Lidar Base Specification 1.2.
+  Approximately 4,379,108,531 points. Served here directly from USGS's
+  public Entwine Point Tile (EPT) bucket via `ept_source` -- not copied into
+  pointcloud.org's own storage, so this Collection's single item streams
+  live from USGS's own infrastructure.
+license:
+  id: "Public Domain (U.S. Government Work)"
+  url: https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map
+keywords: [maine, usgs, 3dep, lidar, entwine, ept, quantum-spatial-inc]
+providers:
+  - name: Quantum Spatial, Inc.
+    roles: [producer]
+  - name: U.S. Geological Survey 3D Elevation Program (3DEP)
+    roles: [licensor, host]
+    url: https://www.usgs.gov/3d-elevation-program
+    pointcloud_org:
+      contact:
+        name: Howard Butler
+        email: howard@hobu.co
+        github_owner: hobu
+extent:
+  temporal:
+    interval:
+      - ["2017-04-30", "2017-11-21"]
+
+"sci:citation": >
+  Quantum Spatial, Inc. (2017). ME_EasternME_2017_A17; Project ID: 66488;
+  Classified Point Cloud. U.S. Geological Survey 3D Elevation Program.
+
+links:
+  - rel: about
+    href: https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/ME_EasternME_2017_A17/ME_Eastern_TL_2017/reports/vendor_provided_xml/Lift_Metadata/111117B_8237.xml
+    title: "Vendor FGDC metadata for ME_Eastern_TL_2017"
+
+pointcloud_org:
+  derivatives: false
+  spatial_reference:
+    id: "EPSG:6348"
+    vertical_id: "EPSG:5703"
+    url: https://epsg.io/6348
+  acknowledgement: >
+    Acknowledgement of the U.S. Geological Survey would be appreciated for
+    products derived from these data.
+  viewer:
+    enabled: true
+    default_asset_id: ME_Eastern_TL_2017
+
+ept_source:
+  href: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/ME_Eastern_TL_2017/ept.json
+  ept_catalog_id: ME_Eastern_TL_2017
+  pointcloud_org:
+    copc_resolution: 1
