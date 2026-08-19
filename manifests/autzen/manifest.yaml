@@ -88,3 +88,4 @@ items:
   pointcloud_org:
     copc_resolution: 1
 # webhook e2e verification 2026-08-19T22:36:42Z (branch never merged)
+# second push: proves preflight now comes only from the webhook 22:39:37Z
