@@ -1,6 +1,6 @@
 <svg viewBox="0 0 980 610" xmlns="http://www.w3.org/2000/svg" font-family="Calibri, Carlito, 'Segoe UI', -apple-system, Helvetica, Arial, sans-serif" role="img" aria-labelledby="flow-title flow-desc">
   <title id="flow-title">The nine steps a manifest takes, from pull request to published dataset</title>
-  <desc id="flow-desc">Steps 1 through 5 repeat on every push while the pull request is open: you open a PR touching one dataset directory; this repo's own CI validates the manifest against schema.json, checks that relative references exist, that a github_owner is present, and that only one dataset is touched; once validation passes, CI fires a preflight dispatch whose payload carries no secrets; pointcloud.org's infrastructure runs the checks that need storage access (do the referenced files exist, do items_dir tiles share a CRS, do the PDAL filters parse); results come back as an updating PR comment plus one pointcloud/* commit status per check, and if anything is red you push a fixup commit and the loop repeats. Steps 6 through 9 fire once, when a maintainer merges: the merge fires a single ingest dispatch; queues fan every asset out so PDAL can read each one's real metadata in a container; once every asset lands, one assembly step writes the dataset's STAC Collection, ItemCollection and GeoParquet, queues a hero image, and posts a completion comment back on the merged PR; then the site is rebuilt and the archive-wide catalog and collections list update, with the merged archive parquet following on the next scheduled pass.</desc>
+  <desc id="flow-desc">Steps 1 through 5 repeat on every push while the pull request is open: you open a PR touching one dataset directory; this repo's own CI validates the manifest against schema.json, checks that relative references exist, that a github_owner is present, and that only one dataset is touched; once validation passes, GitHub delivers a signed webhook straight to pointcloud.org, which verifies its signature before acting; pointcloud.org's infrastructure runs the checks that need storage access (do the referenced files exist, do items_dir tiles share a CRS, do the PDAL filters parse); results come back as an updating PR comment plus one pointcloud/* commit status per check, and if anything is red you push a fixup commit and the loop repeats. Steps 6 through 9 fire once, when a maintainer merges: the merge is delivered as one signed webhook; queues fan every asset out so PDAL can read each one's real metadata in a container; once every asset lands, one assembly step writes the dataset's STAC Collection, ItemCollection and GeoParquet, queues a hero image, and posts a completion comment back on the merged PR; then the site is rebuilt and the archive-wide catalog and collections list update, with the merged archive parquet following on the next scheduled pass.</desc>
 
   <defs>
     <marker id="tip" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
@@ -55,14 +55,14 @@
   <rect x="402" y="102" width="176" height="158" rx="10" fill="#ffffff" stroke="#CBD8E6" stroke-width="1.25"/>
   <circle cx="426" cy="126" r="13" fill="#E8A33D"/>
   <text x="426" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#13315C">3</text>
-  <rect x="480" y="115" width="86" height="17" rx="8.5" fill="#1C7293"/>
-  <text x="523" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">CI, IN THIS REPO</text>
-  <text x="416" y="164" font-size="12.5" font-weight="700" fill="#13315C">Preflight dispatch</text>
-  <text x="416" y="186" font-size="10.5" fill="#5A6B7B">Once validation passes, a</text>
-  <text x="416" y="200" font-size="10.5" fill="#5A6B7B">generic “please check this</text>
-  <text x="416" y="214" font-size="10.5" fill="#5A6B7B">dataset” event fires, its</text>
-  <text x="416" y="228" font-size="10.5" fill="#5A6B7B">payload carrying no secrets</text>
-  <text x="416" y="242" font-size="10.5" fill="#5A6B7B">of any kind.</text>
+  <rect x="470" y="115" width="96" height="17" rx="8.5" fill="#13315C"/>
+  <text x="518" y="127" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">SIGNED WEBHOOK</text>
+  <text x="416" y="164" font-size="12.5" font-weight="700" fill="#13315C">Signed webhook</text>
+  <text x="416" y="186" font-size="10.5" fill="#5A6B7B">GitHub delivers the event</text>
+  <text x="416" y="200" font-size="10.5" fill="#5A6B7B">straight to pointcloud.org,</text>
+  <text x="416" y="214" font-size="10.5" fill="#5A6B7B">which verifies its signature</text>
+  <text x="416" y="228" font-size="10.5" fill="#5A6B7B">before trusting a byte of it.</text>
+  <text x="416" y="242" font-size="10.5" fill="#5A6B7B">No relay repo in between.</text>
 
   <!-- Step 4 -->
   <rect x="598" y="102" width="176" height="158" rx="10" fill="#FFFBF3" stroke="#E8A33D" stroke-width="1.5"/>
@@ -113,8 +113,8 @@
   <rect x="146" y="361" width="80" height="17" rx="8.5" fill="#0B2545"/>
   <text x="186" y="373" text-anchor="middle" font-size="9" font-weight="600" fill="#ffffff" letter-spacing="0.3">MAINTAINER</text>
   <text x="24" y="410" font-size="12.5" font-weight="700" fill="#13315C">Merge</text>
-  <text x="24" y="432" font-size="10.5" fill="#5A6B7B">The merge itself is the trigger: it fires</text>
-  <text x="24" y="446" font-size="10.5" fill="#5A6B7B">a single ingest dispatch. Preflight</text>
+  <text x="24" y="432" font-size="10.5" fill="#5A6B7B">The merge itself is the trigger: one</text>
+  <text x="24" y="446" font-size="10.5" fill="#5A6B7B">signed delivery starts it. Preflight</text>
   <text x="24" y="460" font-size="10.5" fill="#5A6B7B">already told everyone what will</text>
   <text x="24" y="474" font-size="10.5" fill="#5A6B7B">happen, so this is the first step with</text>
   <text x="24" y="488" font-size="10.5" fill="#5A6B7B">side effects — and the only one that</text>
@@ -169,7 +169,7 @@
 
   <!-- Footer notes -->
   <line x1="10" y1="540" x2="970" y2="540" stroke="#E7EEF5" stroke-width="1"/>
-  <text x="10" y="560" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">This repo holds no storage credentials.</tspan> Step 2 needs none at all; step 3 needs only a token scoped to firing that one dispatch, whose payload carries no secrets.</text>
+  <text x="10" y="560" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">This repo holds no credentials at all.</tspan> Step 2 needs none; step 3 is GitHub signing a delivery that pointcloud.org verifies for itself, so no runner ever holds a secret.</text>
   <text x="10" y="578" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">Deleting a manifest directory</tspan> runs the same shape in reverse: the PR is labelled <tspan font-family="Consolas, 'DejaVu Sans Mono', monospace">removal</tspan>, and merging it de-indexes the dataset. The data itself stays in storage.</text>
   <text x="10" y="596" font-size="10.5" fill="#5A6B7B"><tspan font-weight="700" fill="#13315C">Nothing here is a one-way door.</tspan> Re-running the whole path for a dataset that is already live takes one label or one comment — see “Asking for work” in README.md.</text>
 </svg>

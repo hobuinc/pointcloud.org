@@ -18,48 +18,38 @@ legend.
 
 ## Adding a dataset
 
-Each pull request may only add, edit, or remove **one** dataset
-directory under `manifests/` -- CI rejects a PR that touches more than
-one (with a comment explaining why), so a broken dataset never blocks
-review of an unrelated one sharing the same PR. If you're changing more
-than one dataset, open separate PRs.
+**One dataset per pull request.** CI rejects a PR that touches more than one
+directory under `manifests/` (with a comment saying so), so a broken dataset
+never blocks review of an unrelated one. Changing several? Open several PRs.
 
-This is the pattern [conda-forge](https://conda-forge.org/) established
-for software packages, applied to data: one recipe, one pull request,
-reviewed and built in the open. See "Why it works this way" below for
-what else is borrowed from it.
+Four steps, and you only do the first two:
 
-(Maintainers only: a PR whose title contains `[migration]` is exempt
-from the one-dataset rule, and validates the whole repo instead of the
-changed files -- for schema migrations that necessarily touch every
-manifest. It is not a shortcut for bundling datasets: a multi-dataset
-`[migration]` PR gets no preflight and triggers no ingest on merge.)
+1. **Create `manifests/<dataset-id>/manifest.yaml`.** The directory name *is*
+   the dataset id: `id` inside the file must match it exactly, and must be
+   unique across the whole repo even under a different grouping directory.
+   See [what a manifest needs](#at-a-glance-what-a-manifest-needs) below.
+2. **Put companion files in that same directory** — anything the manifest
+   names by relative path, such as a `pdal_filters_file` or a metadata PDF.
+3. **Open the pull request.** Checks that need no credentials run at once;
+   within a minute or two a bot comment reports the real checks against
+   pointcloud.org's own storage. Push fixups until it is green — that comment
+   updates in place rather than piling up.
+4. **A maintainer merges it**, and ingest runs itself. Merging is the only
+   step in the entire path that needs a human decision.
 
-1. Create a new directory `manifests/<dataset-id>/` (the directory name
-   *is* the dataset id -- `id` inside `manifest.yaml` must match it
-   exactly, and must be globally unique across this entire repo, even
-   across different grouping directories -- see "Grouping datasets into
-   directories" below).
-2. Add `manifests/<dataset-id>/manifest.yaml` describing it (see
-   "Manifest reference" below, and the worked examples further down).
-3. If your manifest references any companion files by a relative path
-   (a `pdal_filters_file`, a locally-checked-in metadata PDF -- see
-   below), put them in that same directory.
-4. Open a pull request. CI (`scripts/validate-manifests.mjs`) validates
-   your manifest against [`schema.json`](schema.json) plus a few checks
-   schema.json can't express on its own (mostly: do the relative-path
-   references you gave actually exist on disk, and is a `github_owner`
-   named), and a separate check confirms any foreign/https URL your
-   manifest references is actually reachable.
-5. Within a minute or two, a bot comment appears on your PR reporting
-   the *real* checks against pointcloud.org's own infrastructure --
-   see "How ingest actually happens" below. Push a fixup commit and it
-   updates in place; you don't need to wait for a merge to find out
-   your `items_dir` prefix has a CRS mismatch or a `pdal_filters_file`
-   has a typo'd option.
-6. A maintainer merges it, and ingest starts for real. Merging is the
-   only step in the whole path that needs a human decision -- preflight
-   has already reported everything that can be known before it.
+Not sure a field is right? You do not have to get it right first try — open
+the PR and let the checks tell you. `scripts/validate-manifests.mjs` reports
+schema problems and missing companion files before a human looks at it.
+
+(Maintainers only: a PR whose title contains `[migration]` is exempt from the
+one-dataset rule and validates every manifest in the repo instead of just the
+diff, for schema changes that must touch all of them. It is not a way to
+bundle datasets — a multi-dataset `[migration]` PR gets no preflight and
+triggers no ingest on merge.)
+
+This is [conda-forge](https://conda-forge.org/)'s pattern applied to data: one
+recipe, one pull request, reviewed and built in the open. See
+[Why it works this way](#why-it-works-this-way).
 
 ## Grouping datasets into directories
 
@@ -82,39 +72,38 @@ dataset today) and only nest it once a second, related dataset shows up.
 
 ## How ingest actually happens
 
-![Diagram: nine numbered steps. Steps one to five repeat on every push while the pull request is open -- open a PR, credential-free CI checks, preflight dispatch, real checks against storage, answers posted back on the PR. Steps six to nine fire once at merge -- merge, read every asset, assemble the STAC record, publish.](ingest-flow.svg)
+![Diagram: nine numbered steps. Steps one to five repeat on every push while the pull request is open -- open a PR, credential-free CI checks, GitHub's signed webhook, the real checks against storage, answers posted back on the PR. Steps six to nine fire once at merge -- merge, read every asset, assemble the STAC record, publish.](ingest-flow.svg)
 
-Two dispatches fire from the same workflow
-(`.github/workflows/manifest-ingest.yml`), and the split between them
-is the thing worth understanding:
+Two things drive the pipeline, and the split between them is what is worth
+understanding.
 
-- **Preflight** (`manifest-preflight`) -- fires on **every push** to an
-  open PR, once schema validation has passed (a manifest that doesn't
-  validate gets no preflight; there'd be nothing coherent to check).
-  Read-only: checks that referenced data files exist,
-  `items_dir` CRS consistency, and `pdal_filters`/`pdal_filters_file`
-  validity, then reports pass/fail straight onto your PR as an
-  updating comment plus a `pointcloud/*` commit status per check.
-  Never enqueues anything, never emails anyone, however many times you
-  push. Fix, push, watch the same comment update.
-- **Ingest** (`manifest-ingest`) -- fires **once, when the PR merges**.
-  Enqueues the real work, then posts its own outcome comment -- first
-  to say the assets are queued, then updated in place once assembly
-  finishes with the point count, size, license, and a link to the live
-  dataset page. An `items_dir` dataset's CRS check is asynchronous and
-  can take a while for a large prefix, so that comment may land well
-  after the workflow run that triggered it has finished.
+**This repo's own CI** (`.github/workflows/manifest-check.yml`) runs only the
+checks that need no credentials: schema shape, do relative-path references
+exist on disk, is a `github_owner` named, is every foreign URL reachable, and
+is this really one dataset. Safe for a fork's PR, because there is nothing
+here to steal.
 
-This repo holds no storage credentials. The checks CI can run directly
-here (schema shape, do relative-path references exist locally, is a
-`github_owner` named, is a foreign/https URL reachable) need none at
-all. Anything that has to ask pointcloud.org's storage backend a
-question (does this file exist, do these tiles share a coordinate
-system, does this PDAL filter list parse) happens on pointcloud.org's
-own infrastructure, which this repo reaches by firing a generic "please
-check/ingest this dataset" event whose payload carries no secrets. The
-only credential involved on this side is a token scoped to firing that
-one dispatch, and nothing here knows how the other side is implemented.
+**pointcloud.org's own infrastructure** does everything that needs storage
+access. GitHub delivers the pull-request event to it directly as a signed
+webhook, which it verifies before acting on:
+
+- **While your PR is open** (every push) it runs the read-only checks — do the
+  referenced files exist, are `items_dir` tiles CRS-consistent, do the
+  `pdal_filters` parse — and reports them as one updating comment plus a
+  `pointcloud/*` commit status per check. Nothing is enqueued and nobody is
+  emailed, however many times you push.
+- **When your PR merges** (once) it enqueues the real work, then posts its
+  outcome: first that the assets are queued, then the same comment updated
+  with point count, size, license and a link to the live dataset page. An
+  `items_dir` CRS check is asynchronous, so for a large prefix that comment
+  can land well after the merge.
+
+**No credential lives in this repo, and no CI runner holds one either.** The
+webhook is authenticated by GitHub signing the delivery and pointcloud.org
+verifying that signature, so there is nothing in between to trust. Until
+2026-08-19 this hop went through a private relay repository; removing it
+deleted two GitHub Actions workflows and, more importantly, a failure mode
+where the relay could stop running while every check here still went green.
 
 If a preflight check ever seems stuck or wrong, look at the
 `pointcloud/*` commit statuses on your PR's latest commit (next to the
@@ -144,6 +133,33 @@ its metadata corrected -- it happens as a reviewable diff, and the
 history of every dataset in the archive is `git log`.
 
 ## Manifest reference
+
+### At a glance: what a manifest needs
+
+Nine top-level fields are required, plus **exactly one** way of pointing at
+the data, plus one `pointcloud_org` key. Everything else is optional.
+
+| | Field | Notes |
+| --- | --- | --- |
+| **required** | `schema_version` · `type` · `stac_version` | Fixed markers. Copy them from any [worked example](#worked-examples) |
+| **required** | `id` | Must equal this manifest's own directory name |
+| **required** | `title` · `description` · `keywords` | `description` may instead be a bare `*.md` filename sitting in the same directory |
+| **required** | `license` | An SPDX string, or an object when the terms need a link — see [License](#license) |
+| **required** | `providers[]` | Each entry needs `name`. At least one must carry `pointcloud_org.contact` with `name`, `email` and **`github_owner`** — see [below](#github_owner-is-required-on-every-manifest) |
+| **required** | `pointcloud_org.derivatives` | `true` or `false`: build DTM/DSM/ambient-occlusion rasters at ingest or not |
+| **required — pick exactly one** | `items` · `items_dir` · `stac_item` · `external_source` · `ept_source` | Mutually exclusive; the schema rejects a manifest naming two. See [Describing the data](#describing-the-data) |
+| optional | `extent.temporal` · `sci:doi` · `sci:citation` · `sci:publications` · `links` · `assets` | Standard STAC fields, passed straight through — see [Optional top-level fields](#optional-top-level-fields) |
+| optional | `pointcloud_org.federate` · `default_endpoint` · `derivative_processing` · `spatial_reference` · `acknowledgement` · `publication_date` · `metadata_links` · `viewer` | See [Optional `pointcloud_org` fields](#optional-pointcloud_org-fields) |
+
+Within the source you pick: an `items[]` entry needs `id` and `assets`, plus
+`pointcloud_org.copc_resolution`; an `items_dir` needs `href` and `roles`; the
+other three need only `href`.
+
+Everything in the "optional" rows is genuinely optional — a manifest with the
+required fields and one `ept_source` is a complete, publishable dataset. The
+optional fields buy better provenance on the dataset page, not a successful
+ingest.
+
 
 ### Required fields
 
@@ -550,6 +566,26 @@ and from the root STAC Catalog. Its underlying point-cloud data is
 storage.
 
 ## Asking for work: labels and commands
+
+### What the automation posts, and when
+
+Every one of these is a *sticky* comment: it is edited in place on repeat
+rather than added again, so a PR with six pushes still has one of each.
+
+| Comment | When | What to do about it |
+| --- | --- | --- |
+| Preflight result | Every push to an open PR, once schema validation passes | Read it. This is the real check against storage — green here means merging will work |
+| Ingest result | On merge; then updated when assembly finishes | Nothing. It ends with point count, size, license and a link to the live page |
+| Too many datasets | A PR touching more than one dataset directory | Split it into separate PRs. The check also fails red |
+| Removal notice | A PR deleting a dataset directory | Confirm it says what you meant. Merging de-indexes the dataset; the stored data itself is untouched |
+| Federate notice | A manifest setting `pointcloud_org.federate: true` | Check the estimated size — merging copies that much data into pointcloud.org's own storage |
+| Upstream drift | The weekly sweep, when a dataset's source URLs stop resolving | Fix the manifest, or say so on the PR. It tags the `github_owner` and is edited week to week rather than restacked |
+
+Alongside the preflight comment you also get one `pointcloud/*` commit status
+per check (`pointcloud/file-existence`, `pointcloud/crs-consistency`,
+`pointcloud/pdal-filters`), so a red X names which check failed without you
+opening anything.
+
 
 Everything above is driven by the *content* of your manifest. Two other
 mechanisms let you drive the pipeline without changing any content: a
