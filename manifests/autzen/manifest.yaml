@@ -87,3 +87,4 @@ items:
       roles: [data]
   pointcloud_org:
     copc_resolution: 1
+# per-worker-secret webhook verification 2026-08-20T12:17:07Z
