@@ -8,7 +8,7 @@ id: boston-lot
 title: Boston Lot
 description: "TODO: write a one-line summary for Boston Lot"
 license: UNKNOWN
-keywords: [new-hampshire, crrel]
+keywords: [new-hampshire, crrel, lidar]
 providers:
 - name: CRREL
   roles: [producer]
