@@ -72,7 +72,7 @@ jobs:
       issues: write
     env:
       # Uses the dedicated `pointcloud-org` bot account's PAT (the same
-      # INFRA_DISPATCH_TOKEN secret manifest-ingest.yml uses elsewhere
+      # PC_GH_PUB_CONTENTS secret used elsewhere in this repo
       # for cross-repo dispatch calls -- Howard set it up as a real,
       # purpose-built GitHub account rather than a personal PAT) instead
       # of the default GITHUB_TOKEN. A PR opened via the default token is
@@ -89,7 +89,7 @@ jobs:
       # requests + Issues all "Read and write" on this repo (Issues is
       # for the final label-removal step) for the `pointcloud-org`
       # account itself.
-      GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+      GH_TOKEN: ${{ secrets.PC_GH_PUB_CONTENTS }}
     steps:
       - uses: actions/checkout@v5
         with:

@@ -145,7 +145,7 @@ jobs:
     # hours before it is reaped. Nothing here legitimately takes this long.
     timeout-minutes: 10
     env:
-      GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+      GH_TOKEN: ${{ secrets.PC_GH_PUB_CONTENTS }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

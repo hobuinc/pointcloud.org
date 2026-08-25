@@ -14,7 +14,7 @@
 # Nothing here needs infrastructure credentials. This repo is the public,
 # community-facing half of pointcloud.org: anyone can open a PR adding a dataset
 # under manifests/<id>/, and this repo holds no infrastructure secrets beyond
-# INFRA_DISPATCH_TOKEN, a fine-grained PAT scoped ONLY to the private
+# PC_GH_INFRA_DISPATCH, a fine-grained PAT scoped ONLY to the private
 # infrastructure repo's dispatches endpoint. Any check needing real credentials
 # (does this file exist, do these tiles share a CRS, does this PDAL filter list
 # parse) happens on the infrastructure side of a dispatch -- see

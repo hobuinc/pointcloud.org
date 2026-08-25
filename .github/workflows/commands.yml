@@ -95,7 +95,7 @@ jobs:
       # Same dedicated bot account used by reingest.yml and the
       # cross-repo dispatch calls -- see that workflow's own comment for
       # why this isn't the default GITHUB_TOKEN.
-      GH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+      GH_TOKEN: ${{ secrets.PC_GH_PUB_CONTENTS }}
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       SENDER: ${{ github.event.comment.user.login || github.event.issue.user.login }}
     steps:
@@ -246,7 +246,7 @@ jobs:
         if: steps.auth.outputs.unauthorized != 'true' && steps.parse.outputs.verb == 'refresh-stac'
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          github-token: ${{ secrets.PC_GH_INFRA_DISPATCH }}
           script: |
             await github.rest.repos.createDispatchEvent({
               owner: "hobuinc",

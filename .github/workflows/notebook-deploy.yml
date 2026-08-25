@@ -7,7 +7,7 @@
 # until someone runs that workflow by hand (which is how it worked when the site
 # first shipped, and is exactly the kind of manual step that gets forgotten).
 #
-# Same dispatch mechanism as manifest-ingest.yml, same INFRA_DISPATCH_TOKEN.
+# Same dispatch mechanism as manifest-ingest.yml, same PC_GH_INFRA_DISPATCH.
 name: Deploy notebook
 
 on:
@@ -32,7 +32,7 @@ jobs:
       - name: Dispatch a JupyterLite rebuild to pointcloud.org-infrastructure
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          github-token: ${{ secrets.PC_GH_INFRA_DISPATCH }}
           script: |
             await github.rest.repos.createDispatchEvent({
               owner: "hobuinc",
