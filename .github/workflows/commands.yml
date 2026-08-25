@@ -170,20 +170,23 @@ jobs:
           echo "Parsed verb='$VERB' arg='$ARG'"
 
           if [ -z "$VERB" ]; then
-            # NOTE the zero-width space after "@pointcloud-org" in each
-            # example below. The help text has to *show* the command
-            # syntax, but a bot comment containing the literal trigger
-            # phrase would match this workflow's own filter and start a
-            # loop. The examples stay copy-pasteable (the ZWSP is dropped
-            # by the parser's whitespace handling) without being
-            # self-triggering.
-            gh issue comment "$ISSUE_NUMBER" --body "I couldn't tell which command you meant. Supported commands:
-
-          - \`@pointcloud-org​, please reingest <DATASET_ID>\` — re-run ingest for one dataset. Opens a pull request for an admin to merge; the ingest happens on merge.
-          - \`@pointcloud-org​, please refresh-stac\` — rebuild the archive-wide STAC catalog, collections manifest, and the single-file \`items.parquet\`.
-          - \`@pointcloud-org​, please check-reachability\` — check every dataset's external URLs and report anything unreachable.
-
-          Dataset ids are directory names under \`manifests/\` (for grouped datasets, just the leaf, e.g. \`MN_SEDriftless_3_2021\`)."
+            # Stay SILENT on an unrecognised request.
+            #
+            # This workflow and the ingest Worker both listen for
+            # "@pointcloud-org, please …", but they own different halves of it:
+            # this one runs the three fixed operational verbs below, while the
+            # Worker handles free-form requests (explain / enrich) through the
+            # signed webhook. Anything this parser does not recognise is very
+            # likely addressed to the Worker, so answering "I couldn't tell which
+            # command you meant" was actively wrong -- it contradicted a request
+            # that was being handled correctly somewhere else, and it did so
+            # within seconds, before the Worker had finished.
+            #
+            # Two responders, one trigger phrase, so the quieter one defers. The
+            # reason is recorded in the job log rather than on the pull request.
+            echo "::notice::no operational verb matched; leaving this to the ingest Worker (explain/enrich)"
+            echo "Recognised verbs here: reingest, refresh-stac, check-reachability"
+            exit 0
           fi
 
       # ----- reingest <DATASET_ID> -----
