@@ -1,0 +1,162 @@
+<svg viewBox="0 0 1280 560" xmlns="http://www.w3.org/2000/svg" font-family="Calibri, Carlito, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="t1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8BBFD9"/>
+    </marker>
+    <marker id="t2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#FFC000"/>
+    </marker>
+    <marker id="t3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5A6B7B"/>
+    </marker>
+  </defs>
+
+  <!-- ===== PHASE A ===== -->
+  <rect x="1" y="4" width="1278" height="26" rx="7" fill="#F1F5F9"/>
+  <text x="16" y="22" font-size="12.5" font-weight="700" fill="#325782" letter-spacing="0.7">WHILE THE PULL REQUEST IS OPEN</text>
+  <text x="316" y="22" font-size="12" fill="#5A6B7B">re-runs on every push · nothing is enqueued · nobody is emailed</text>
+
+  <g>
+    <rect x="1" y="40" width="246" height="176" rx="11" fill="#ffffff" stroke="#BBD3E6" stroke-width="1.5"/>
+    <circle cx="29" cy="68" r="15" fill="#FFC000"/>
+    <text x="29" y="74" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">1</text>
+    <rect x="171" y="56" width="62" height="20" rx="10" fill="#14304D"/>
+    <text x="202" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">YOU</text>
+    <text x="17" y="112" font-size="14" font-weight="700" fill="#325782">Open a pull request</text>
+    <text x="17" y="136" font-size="11.5" fill="#5A6B7B">Add or edit exactly one</text>
+    <text x="17" y="153" font-size="11.5" fill="#5A6B7B">dataset directory, holding</text>
+    <text x="17" y="170" font-size="11.5" fill="#5A6B7B">one manifest.yaml and any</text>
+    <text x="17" y="187" font-size="11.5" fill="#5A6B7B">files it references.</text>
+  </g>
+
+  <g>
+    <rect x="259" y="40" width="246" height="176" rx="11" fill="#ffffff" stroke="#BBD3E6" stroke-width="1.5"/>
+    <circle cx="287" cy="68" r="15" fill="#FFC000"/>
+    <text x="287" y="74" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">2</text>
+    <rect x="391" y="56" width="100" height="20" rx="10" fill="#207EB4"/>
+    <text x="441" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">CI, IN THIS REPO</text>
+    <text x="275" y="112" font-size="14" font-weight="700" fill="#325782">Checks needing no</text>
+    <text x="275" y="130" font-size="14" font-weight="700" fill="#325782">credentials</text>
+    <text x="275" y="153" font-size="11.5" fill="#5A6B7B">Schema shape · references</text>
+    <text x="275" y="170" font-size="11.5" fill="#5A6B7B">exist · an owner is named ·</text>
+    <text x="275" y="187" font-size="11.5" fill="#5A6B7B">remote URLs are reachable</text>
+  </g>
+
+  <g>
+    <rect x="517" y="40" width="246" height="176" rx="11" fill="#ffffff" stroke="#BBD3E6" stroke-width="1.5"/>
+    <circle cx="545" cy="68" r="15" fill="#FFC000"/>
+    <text x="545" y="74" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">3</text>
+    <rect x="639" y="56" width="110" height="20" rx="10" fill="#325782"/>
+    <text x="694" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">SIGNED WEBHOOK</text>
+    <text x="533" y="112" font-size="14" font-weight="700" fill="#325782">Signed webhook</text>
+    <text x="533" y="136" font-size="11.5" fill="#5A6B7B">GitHub delivers the event</text>
+    <text x="533" y="153" font-size="11.5" fill="#5A6B7B">straight to the archive,</text>
+    <text x="533" y="170" font-size="11.5" fill="#5A6B7B">which verifies its signature</text>
+    <text x="533" y="187" font-size="11.5" fill="#5A6B7B">before trusting a byte.</text>
+  </g>
+
+  <g>
+    <rect x="775" y="40" width="246" height="176" rx="11" fill="#F4FAFF" stroke="#FFC000" stroke-width="1.75"/>
+    <circle cx="803" cy="68" r="15" fill="#FFC000"/>
+    <text x="803" y="74" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">4</text>
+    <rect x="899" y="56" width="108" height="20" rx="10" fill="#14304D"/>
+    <text x="953" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">INFRASTRUCTURE</text>
+    <text x="791" y="112" font-size="14" font-weight="700" fill="#325782">Checks needing</text>
+    <text x="791" y="130" font-size="14" font-weight="700" fill="#325782">storage access</text>
+    <text x="791" y="153" font-size="11.5" fill="#5A6B7B">Do the files exist? Do the</text>
+    <text x="791" y="170" font-size="11.5" fill="#5A6B7B">tiles share one CRS? Do the</text>
+    <text x="791" y="187" font-size="11.5" fill="#5A6B7B">PDAL filters parse?</text>
+  </g>
+
+  <g>
+    <rect x="1033" y="40" width="246" height="176" rx="11" fill="#ffffff" stroke="#BBD3E6" stroke-width="1.5"/>
+    <circle cx="1061" cy="68" r="15" fill="#FFC000"/>
+    <text x="1061" y="74" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">5</text>
+    <rect x="1157" y="56" width="108" height="20" rx="10" fill="#14304D"/>
+    <text x="1211" y="70" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">INFRASTRUCTURE</text>
+    <text x="1049" y="112" font-size="14" font-weight="700" fill="#325782">Answers land on</text>
+    <text x="1049" y="130" font-size="14" font-weight="700" fill="#325782">the pull request</text>
+    <text x="1049" y="153" font-size="11.5" fill="#5A6B7B">One comment that updates</text>
+    <text x="1049" y="170" font-size="11.5" fill="#5A6B7B">in place, plus one commit</text>
+    <text x="1049" y="187" font-size="11.5" fill="#5A6B7B">status per check.</text>
+  </g>
+
+  <path d="M249,128 L255,128" fill="none" stroke="#8BBFD9" stroke-width="1.75" marker-end="url(#t1)"/>
+  <path d="M507,128 L513,128" fill="none" stroke="#8BBFD9" stroke-width="1.75" marker-end="url(#t1)"/>
+  <path d="M765,128 L771,128" fill="none" stroke="#FFC000" stroke-width="1.75" marker-end="url(#t2)"/>
+  <path d="M1023,128 L1029,128" fill="none" stroke="#FFC000" stroke-width="1.75" marker-end="url(#t2)"/>
+
+  <!-- loop back -->
+  <path d="M1156,218 L1156,240 L124,240 L124,220" fill="none" stroke="#5A6B7B" stroke-width="1.5" stroke-dasharray="6,5" marker-end="url(#t3)"/>
+  <rect x="520" y="229" width="240" height="22" rx="11" fill="#ffffff"/>
+  <text x="640" y="245" text-anchor="middle" font-size="12" fill="#5A6B7B" font-style="italic">anything red? push a fixup commit</text>
+
+  <!-- ===== PHASE B ===== -->
+  <rect x="1" y="262" width="1278" height="26" rx="7" fill="#E7EEF5"/>
+  <text x="16" y="280" font-size="12.5" font-weight="700" fill="#325782" letter-spacing="0.7">ONCE A MAINTAINER MERGES IT</text>
+  <text x="316" y="280" font-size="12" fill="#5A6B7B">fires exactly once · nobody touches anything from here to publication</text>
+
+  <g>
+    <rect x="7" y="298" width="308" height="180" rx="11" fill="#ffffff" stroke="#BBD3E6" stroke-width="1.5"/>
+    <circle cx="35" cy="326" r="15" fill="#FFC000"/>
+    <text x="35" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">6</text>
+    <rect x="215" y="314" width="86" height="20" rx="10" fill="#14304D"/>
+    <text x="258" y="328" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">MAINTAINER</text>
+    <text x="23" y="370" font-size="14" font-weight="700" fill="#325782">Merge</text>
+    <text x="23" y="394" font-size="11.5" fill="#5A6B7B">The merge is the trigger. Preflight has</text>
+    <text x="23" y="411" font-size="11.5" fill="#5A6B7B">already said what will happen, so this</text>
+    <text x="23" y="428" font-size="11.5" fill="#5A6B7B">is the first step with side effects —</text>
+    <text x="23" y="445" font-size="11.5" fill="#5A6B7B">and the only one in all nine that</text>
+    <text x="23" y="462" font-size="11.5" fill="#5A6B7B">needs a human decision.</text>
+  </g>
+
+  <g>
+    <rect x="329" y="298" width="308" height="180" rx="11" fill="#F4FAFF" stroke="#FFC000" stroke-width="1.75"/>
+    <circle cx="357" cy="326" r="15" fill="#FFC000"/>
+    <text x="357" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">7</text>
+    <rect x="515" y="314" width="108" height="20" rx="10" fill="#14304D"/>
+    <text x="569" y="328" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">INFRASTRUCTURE</text>
+    <text x="345" y="370" font-size="14" font-weight="700" fill="#325782">Read every asset</text>
+    <text x="345" y="394" font-size="11.5" fill="#5A6B7B">Queues fan the assets out so each is</text>
+    <text x="345" y="411" font-size="11.5" fill="#5A6B7B">processed and retried on its own. PDAL</text>
+    <text x="345" y="428" font-size="11.5" fill="#5A6B7B">runs in a container to read each</text>
+    <text x="345" y="445" font-size="11.5" fill="#5A6B7B">file’s real metadata: point count,</text>
+    <text x="345" y="462" font-size="11.5" fill="#5A6B7B">bounds, coordinate system, statistics.</text>
+  </g>
+
+  <g>
+    <rect x="651" y="298" width="308" height="180" rx="11" fill="#F4FAFF" stroke="#FFC000" stroke-width="1.75"/>
+    <circle cx="679" cy="326" r="15" fill="#FFC000"/>
+    <text x="679" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">8</text>
+    <rect x="837" y="314" width="108" height="20" rx="10" fill="#14304D"/>
+    <text x="891" y="328" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">INFRASTRUCTURE</text>
+    <text x="667" y="370" font-size="14" font-weight="700" fill="#325782">Assemble the record</text>
+    <text x="667" y="394" font-size="11.5" fill="#5A6B7B">When the last asset lands, one assembly</text>
+    <text x="667" y="411" font-size="11.5" fill="#5A6B7B">step writes the STAC Collection,</text>
+    <text x="667" y="428" font-size="11.5" fill="#5A6B7B">ItemCollection and GeoParquet, queues</text>
+    <text x="667" y="445" font-size="11.5" fill="#5A6B7B">a hero image from the real viewer, and</text>
+    <text x="667" y="462" font-size="11.5" fill="#5A6B7B">comments the result on your PR.</text>
+  </g>
+
+  <g>
+    <rect x="973" y="298" width="308" height="180" rx="11" fill="#ffffff" stroke="#BBD3E6" stroke-width="1.5"/>
+    <circle cx="1001" cy="326" r="15" fill="#FFC000"/>
+    <text x="1001" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="#325782">9</text>
+    <rect x="1159" y="314" width="108" height="20" rx="10" fill="#14304D"/>
+    <text x="1213" y="328" text-anchor="middle" font-size="10" font-weight="600" fill="#ffffff" letter-spacing="0.4">INFRASTRUCTURE</text>
+    <text x="989" y="370" font-size="14" font-weight="700" fill="#325782">Publish</text>
+    <text x="989" y="394" font-size="11.5" fill="#5A6B7B">The site is rebuilt so the dataset page</text>
+    <text x="989" y="411" font-size="11.5" fill="#5A6B7B">goes live, and the archive-wide catalog</text>
+    <text x="989" y="428" font-size="11.5" fill="#5A6B7B">and collections list update. The merged</text>
+    <text x="989" y="445" font-size="11.5" fill="#5A6B7B">archive parquet is rebuilt six-hourly, so</text>
+    <text x="989" y="462" font-size="11.5" fill="#5A6B7B">it can trail the page by a while.</text>
+  </g>
+
+  <path d="M317,388 L325,388" fill="none" stroke="#FFC000" stroke-width="1.75" marker-end="url(#t2)"/>
+  <path d="M639,388 L647,388" fill="none" stroke="#FFC000" stroke-width="1.75" marker-end="url(#t2)"/>
+  <path d="M961,388 L969,388" fill="none" stroke="#FFC000" stroke-width="1.75" marker-end="url(#t2)"/>
+
+  <line x1="1" y1="502" x2="1279" y2="502" stroke="#E7EEF5" stroke-width="1.5"/>
+  <text x="640" y="524" text-anchor="middle" font-size="12.5" fill="#207EB4" font-style="italic">This repo holds no credentials at all: step 2 needs none, and step 3 is GitHub signing a delivery the archive verifies for itself.</text>
+  <text x="640" y="546" text-anchor="middle" font-size="12.5" fill="#5A6B7B">Removing a dataset runs the same shape in reverse. Re-running the whole path for a live dataset takes one label, or one comment.</text>
+</svg>
