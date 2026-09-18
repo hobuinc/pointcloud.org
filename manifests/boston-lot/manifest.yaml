@@ -6,18 +6,23 @@ type: Collection
 stac_version: 1.0.0
 id: boston-lot
 title: Boston Lot
-description: "TODO: write a one-line summary for Boston Lot"
+description: Airborne lidar point cloud covering the Boston Lot Conservation Area in Lebanon and Hanover, NH, captured as part of a sensor integration and testing campaign. The US Army Corps of Engineers Remote Sensing & GIS Center of Expertise developed an integrated, multi-sensor, helicopter-mounted payload that includes lidar, visible spectrum imagery, and synthetic aperture radar. This system, called the RaLiPod, underwent local flight tests to confirm operation, check calibrations, and assess performance and acquisition techniques. Data acquisition was in collaboration with the University of Houston's National Center for Airborne Laser Mapping (NCALM).
 license: UNKNOWN
-keywords: [new-hampshire, crrel]
+keywords: [new-hampshire, lebanon, hanover, boston-lot, crrel, ncalm, ralipod, airborne-lidar, sensor-integration, copc]
 providers:
 - name: CRREL
-  roles: [producer]
+  roles:
+  - producer
   url: https://www.erdc.usace.army.mil/Locations/CRREL/
   pointcloud_org:
     contact:
       name: Howard Butler
       email: howard@hobu.co
       github_owner: hobu
+- name: National Center for Airborne Laser Mapping (NCALM), University of Houston
+  description: Collaborated on data acquisition for the RaLiPod flight tests.
+  roles:
+  - producer
 extent:
   temporal:
     interval:
